@@ -2,6 +2,7 @@ import { drizzle } from "drizzle-orm/d1";
 import { migrate } from "drizzle-orm/d1/migrator";
 import { Miniflare } from "miniflare";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { nextOccurrenceAfter, toDateStr } from "@getitdone/shared";
 import { createApp } from "../src/app";
 
 let mf: Miniflare;
@@ -276,7 +277,7 @@ describe("tasks", () => {
         method: "POST",
         body: {
           title: "Buy milk",
-          dueDate: "2026-08-06",
+          dueDate: toDateStr(new Date()),
           dueTime: "17:00",
           priority: 2,
           tagIds: [tags[0]?.id],
@@ -370,7 +371,7 @@ describe("recurrence", () => {
         method: "POST",
         body: {
           title: "Weekly standup",
-          dueDate: "2026-08-06",
+          dueDate: toDateStr(new Date()),
           recurrence: "FREQ=WEEKLY;BYDAY=MO,WE,FR",
           tagIds: [tags[0]?.id],
         },
@@ -386,7 +387,9 @@ describe("recurrence", () => {
       }),
     );
     expect(res.status).toBe(200);
-    expect(res.body.next?.dueDate).toBe("2026-08-07");
+    expect(res.body.next?.dueDate).toBe(
+      nextOccurrenceAfter("FREQ=WEEKLY;BYDAY=MO,WE,FR", toDateStr(new Date())),
+    );
     expect(res.body.next?.title).toBe("Weekly standup");
     expect(res.body.next?.tags?.length).toBe(1);
   });
