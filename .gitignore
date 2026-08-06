@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+
+# npm lockfile (repo uses pnpm)
+package-lock.json
+
+# Build outputs
+dist/
+build/
+.turbo/
+.wrangler/
+
+# Cloudflare local state (D1, workerd)
+.wrangler/
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Test artifacts
+coverage/
+playwright-report/
+test-results/

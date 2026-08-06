@@ -1,0 +1,48 @@
+name = "getitdone-api"
+main = "src/index.ts"
+compatibility_date = "2026-07-01"
+compatibility_flags = ["nodejs_compat"]
+account_id = "f900eb89497d23d1f62b6a46e4dabc87"
+
+[observability]
+enabled = true
+
+# ---------------------------------------------------------------------------
+# Local development.
+# `wrangler dev` and `wrangler d1 ... --local` use a local SQLite file under
+# .wrangler/. The database_id here is a placeholder; it is not used locally.
+# ---------------------------------------------------------------------------
+[[d1_databases]]
+binding = "DB"
+database_name = "getitdone-db-local"
+database_id = "00000000-0000-0000-0000-000000000000"
+migrations_dir = "migrations"
+
+[vars]
+APP_ENV = "development"
+
+# ---------------------------------------------------------------------------
+# Preview environment.
+# Run `wrangler d1 create getitdone-db-preview` and paste the id below, then
+# `pnpm db:migrate:preview` before deploying.
+# ---------------------------------------------------------------------------
+[env.preview]
+vars = { APP_ENV = "preview" }
+
+[[env.preview.d1_databases]]
+binding = "DB"
+database_name = "getitdone-db-preview"
+database_id = "198133eb-d94e-43d3-aa66-4126120ac76a"
+migrations_dir = "migrations"
+
+# ---------------------------------------------------------------------------
+# Production environment.
+# ---------------------------------------------------------------------------
+[env.production]
+vars = { APP_ENV = "production", CORS_ORIGIN = "https://getitdone-1g5.pages.dev,https://getitdone.arga-automation.xyz" }
+
+[[env.production.d1_databases]]
+binding = "DB"
+database_name = "getitdone-db"
+database_id = "44e2f08d-12b5-40b0-abdb-f902aa94125c"
+migrations_dir = "migrations"
