@@ -1,4 +1,4 @@
-import type { List } from "@getitdone/shared";
+import type { List, Tag } from "@getitdone/shared";
 import { useMutation } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { NavLink } from "react-router";
@@ -6,6 +6,7 @@ import type { ThemeMode } from "../hooks/useTheme";
 import type { Bootstrap } from "../lib/api";
 import { listsApi, tagsApi } from "../lib/api";
 import { cn } from "../lib/cn";
+import { ListIconGlyph } from "../lib/listIcons";
 import { invalidateAll } from "../lib/mutations";
 import { Popover } from "./fields";
 import {
@@ -25,18 +26,8 @@ import {
   TagIcon,
   TrashIcon,
 } from "./icons";
+import { ConfirmModal, ListModal, type ListModalInput, TagModal } from "./modals";
 import { useToast } from "./ui";
-
-const PALETTE = [
-  "#E2502E",
-  "#E08A00",
-  "#2F7A6D",
-  "#5B6EE8",
-  "#8A5BC8",
-  "#C85B8A",
-  "#4A8A5B",
-  "#6F6959",
-];
 
 const ROOT_PARENT = "__root__";
 
@@ -97,73 +88,6 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-function ListCreateForm({
-  name,
-  onName,
-  color,
-  onColor,
-  onSubmit,
-  onCancel,
-}: {
-  name: string;
-  onName: (v: string) => void;
-  color: string;
-  onColor: (c: string) => void;
-  onSubmit: () => void;
-  onCancel: () => void;
-}) {
-  return (
-    <form
-      className="space-y-2 rounded-xl border border-rule bg-card p-2.5 anim-fade-in"
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (name.trim()) onSubmit();
-      }}
-    >
-      <input
-        autoFocus
-        value={name}
-        onChange={(e) => onName(e.target.value)}
-        placeholder="List name"
-        className="w-full bg-transparent px-1 py-0.5 text-sm outline-none placeholder:text-inkfaint"
-      />
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex gap-1">
-          {PALETTE.map((c) => (
-            <button
-              key={c}
-              type="button"
-              onClick={() => onColor(c)}
-              aria-label={`Color ${c}`}
-              className={cn(
-                "size-4 cursor-pointer rounded-full transition-transform",
-                color === c && "scale-125 ring-2 ring-accent ring-offset-1 ring-offset-card",
-              )}
-              style={{ background: c }}
-            />
-          ))}
-        </div>
-        <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="cursor-pointer rounded-lg border border-rule px-2.5 py-1 text-xs text-inkdim transition-colors hover:bg-card2"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={!name.trim()}
-            className="rounded-lg bg-accent px-2.5 py-1 text-xs font-semibold text-card3 transition-transform active:scale-95 disabled:opacity-40"
-          >
-            Create
-          </button>
-        </div>
-      </div>
-    </form>
-  );
-}
-
 export function Sidebar({
   data,
   user,
@@ -180,15 +104,17 @@ export function Sidebar({
   setTheme: (t: ThemeMode) => void;
 }) {
   const { toast } = useToast();
-  const [creatingParent, setCreatingParent] = useState<string | null>(null);
-  const [newName, setNewName] = useState("");
-  const [newColor, setNewColor] = useState<string>(PALETTE[0] ?? "#E2502E");
-  const [renaming, setRenaming] = useState<string | null>(null);
-  const [renameValue, setRenameValue] = useState("");
-  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
-  const [renamingTag, setRenamingTag] = useState<string | null>(null);
-  const [renameTagValue, setRenameTagValue] = useState("");
-  const [confirmDeleteTag, setConfirmDeleteTag] = useState<string | null>(null);
+  const [listModal, setListModal] = useState<
+    { mode: "create"; parentId: string | null } | { mode: "rename"; list: List } | null
+  >(null);
+  const [tagModal, setTagModal] = useState<
+    { mode: "create" } | { mode: "rename"; tag: Tag } | null
+  >(null);
+  const [deleteTarget, setDeleteTarget] = useState<
+    | { kind: "list"; id: string; name: string; hasChildren: boolean }
+    | { kind: "tag"; id: string; name: string }
+    | null
+  >(null);
 
   const lists = data.lists;
   const tags = data.tags;
@@ -206,32 +132,28 @@ export function Sidebar({
   }, [lists]);
 
   const createList = useMutation({
-    mutationFn: () =>
-      listsApi.create({
-        name: newName.trim(),
-        color: newColor,
-        parentId: creatingParent === ROOT_PARENT ? null : creatingParent,
-      }),
+    mutationFn: (input: ListModalInput) => listsApi.create(input),
     onSuccess: () => {
-      setNewName("");
-      setCreatingParent(null);
+      setListModal(null);
       invalidate();
       toast("success", "List created");
     },
   });
 
   const updateList = useMutation({
-    mutationFn: ({ id, name }: { id: string; name: string }) => listsApi.update(id, { name }),
+    mutationFn: ({ id, input }: { id: string; input: ListModalInput }) =>
+      listsApi.update(id, { name: input.name, color: input.color, icon: input.icon }),
     onSuccess: () => {
-      setRenaming(null);
+      setListModal(null);
       invalidate();
+      toast("success", "List updated");
     },
   });
 
   const deleteList = useMutation({
     mutationFn: (id: string) => listsApi.remove(id),
     onSuccess: () => {
-      setConfirmDelete(null);
+      setDeleteTarget(null);
       invalidate();
       toast("success", "List deleted");
     },
@@ -248,12 +170,6 @@ export function Sidebar({
     const next = [...siblings];
     [next[index], next[target]] = [next[target]!, next[index]!];
     moveList.mutate(next.map((l) => l.id));
-  }
-
-  function openSubCreate(list: List) {
-    setNewName("");
-    setNewColor(list.color);
-    setCreatingParent(list.id);
   }
 
   function renderLists(parentKey: string, depth: number) {
@@ -277,10 +193,14 @@ export function Sidebar({
               style={{ paddingLeft: 10 + depth * 16 }}
             >
               <span
-                className="grid size-5 shrink-0 place-items-center rounded-lg text-[10px] font-semibold text-card3"
+                className="grid size-5 shrink-0 place-items-center rounded-lg text-card3"
                 style={{ background: list.color }}
               >
-                {list.icon ?? <ListIcon className="size-3.5" strokeWidth={2.2} />}
+                {list.icon ? (
+                  <ListIconGlyph icon={list.icon} className="size-3.5" />
+                ) : (
+                  <ListIcon className="size-3.5" strokeWidth={2.2} />
+                )}
               </span>
               <span className="truncate">{list.name}</span>
             </NavLink>
@@ -297,35 +217,15 @@ export function Sidebar({
               width="w-44"
             >
               <div className="space-y-0.5">
-                {renaming === list.id ? (
-                  <form
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      if (renameValue.trim())
-                        updateList.mutate({ id: list.id, name: renameValue.trim() });
-                    }}
-                  >
-                    <input
-                      autoFocus
-                      value={renameValue}
-                      onChange={(e) => setRenameValue(e.target.value)}
-                      className="w-full rounded-lg border border-accent bg-card px-2 py-1.5 text-sm outline-none"
-                    />
-                  </form>
-                ) : (
-                  <MenuButton
-                    icon={<ListIcon className="size-3.5" />}
-                    onClick={() => {
-                      setRenaming(list.id);
-                      setRenameValue(list.name);
-                    }}
-                  >
-                    Rename
-                  </MenuButton>
-                )}
+                <MenuButton
+                  icon={<ListIcon className="size-3.5" />}
+                  onClick={() => setListModal({ mode: "rename", list })}
+                >
+                  Rename
+                </MenuButton>
                 <MenuButton
                   icon={<LayersIcon className="size-3.5" />}
-                  onClick={() => openSubCreate(list)}
+                  onClick={() => setListModal({ mode: "create", parentId: list.id })}
                 >
                   New sub-list
                 </MenuButton>
@@ -343,54 +243,18 @@ export function Sidebar({
                     Down
                   </MenuButton>
                 </div>
-                {confirmDelete === list.id ? (
-                  <div className="space-y-1 pt-1">
-                    <p className="px-2 text-xs text-inkdim">
-                      {hasChildren
-                        ? "Sub-lists move to the root. Delete?"
-                        : "Move tasks to inbox and delete?"}
-                    </p>
-                    <div className="flex gap-1">
-                      <button
-                        type="button"
-                        onClick={() => deleteList.mutate(list.id)}
-                        className="flex-1 cursor-pointer rounded-lg bg-accent px-2 py-1.5 text-xs font-semibold text-card3"
-                      >
-                        Delete
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setConfirmDelete(null)}
-                        className="flex-1 cursor-pointer rounded-lg border border-rule px-2 py-1.5 text-xs"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <MenuButton
-                    icon={<TrashIcon className="size-3.5" />}
-                    onClick={() => setConfirmDelete(list.id)}
-                    danger
-                  >
-                    Delete
-                  </MenuButton>
-                )}
+                <MenuButton
+                  icon={<TrashIcon className="size-3.5" />}
+                  onClick={() =>
+                    setDeleteTarget({ kind: "list", id: list.id, name: list.name, hasChildren })
+                  }
+                  danger
+                >
+                  Delete
+                </MenuButton>
               </div>
             </Popover>
           </div>
-          {creatingParent === list.id ? (
-            <div className="my-1 anim-fade-in" style={{ marginLeft: 10 + depth * 16 }}>
-              <ListCreateForm
-                name={newName}
-                onName={setNewName}
-                color={newColor}
-                onColor={setNewColor}
-                onSubmit={() => createList.mutate()}
-                onCancel={() => setCreatingParent(null)}
-              />
-            </div>
-          ) : null}
           {renderLists(list.id, depth + 1)}
         </div>
       );
@@ -400,6 +264,7 @@ export function Sidebar({
   const createTag = useMutation({
     mutationFn: (name: string) => tagsApi.create({ name }),
     onSuccess: () => {
+      setTagModal(null);
       invalidate();
       toast("success", "Tag created");
     },
@@ -408,15 +273,16 @@ export function Sidebar({
   const updateTag = useMutation({
     mutationFn: ({ id, name }: { id: string; name: string }) => tagsApi.update(id, { name }),
     onSuccess: () => {
-      setRenamingTag(null);
+      setTagModal(null);
       invalidate();
+      toast("success", "Tag updated");
     },
   });
 
   const deleteTag = useMutation({
     mutationFn: (id: string) => tagsApi.remove(id),
     onSuccess: () => {
-      setConfirmDeleteTag(null);
+      setDeleteTarget(null);
       invalidate();
       toast("success", "Tag deleted");
     },
@@ -483,7 +349,7 @@ export function Sidebar({
             Lists
             <button
               type="button"
-              onClick={() => setCreatingParent((p) => (p === ROOT_PARENT ? null : ROOT_PARENT))}
+              onClick={() => setListModal({ mode: "create", parentId: null })}
               aria-label="New list"
               className="grid size-5 cursor-pointer place-items-center rounded-md text-inkfaint transition-colors hover:bg-card2 hover:text-accent"
             >
@@ -491,19 +357,6 @@ export function Sidebar({
             </button>
           </span>
         </SectionLabel>
-
-        {creatingParent === ROOT_PARENT ? (
-          <div className="mb-2 anim-fade-in">
-            <ListCreateForm
-              name={newName}
-              onName={setNewName}
-              color={newColor}
-              onColor={setNewColor}
-              onSubmit={() => createList.mutate()}
-              onCancel={() => setCreatingParent(null)}
-            />
-          </div>
-        ) : null}
 
         <div className="space-y-0.5">
           {lists.length === 0 ? (
@@ -520,7 +373,7 @@ export function Sidebar({
             Tags
             <button
               type="button"
-              onClick={() => createTag.mutate(`tag-${tags.length + 1}`)}
+              onClick={() => setTagModal({ mode: "create" })}
               aria-label="New tag"
               className="grid size-5 cursor-pointer place-items-center rounded-md text-inkfaint transition-colors hover:bg-card2 hover:text-accent"
             >
@@ -559,61 +412,19 @@ export function Sidebar({
                 width="w-44"
               >
                 <div className="space-y-0.5">
-                  {renamingTag === tag.id ? (
-                    <form
-                      onSubmit={(e) => {
-                        e.preventDefault();
-                        if (renameTagValue.trim())
-                          updateTag.mutate({ id: tag.id, name: renameTagValue.trim() });
-                      }}
-                    >
-                      <input
-                        autoFocus
-                        value={renameTagValue}
-                        onChange={(e) => setRenameTagValue(e.target.value)}
-                        className="w-full rounded-lg border border-accent bg-card px-2 py-1.5 text-sm outline-none"
-                      />
-                    </form>
-                  ) : (
-                    <MenuButton
-                      icon={<TagIcon className="size-3.5" />}
-                      onClick={() => {
-                        setRenamingTag(tag.id);
-                        setRenameTagValue(tag.name);
-                      }}
-                    >
-                      Rename
-                    </MenuButton>
-                  )}
-                  {confirmDeleteTag === tag.id ? (
-                    <div className="space-y-1 pt-1">
-                      <p className="px-2 text-xs text-inkdim">Remove this tag from all tasks?</p>
-                      <div className="flex gap-1">
-                        <button
-                          type="button"
-                          onClick={() => deleteTag.mutate(tag.id)}
-                          className="flex-1 cursor-pointer rounded-lg bg-accent px-2 py-1.5 text-xs font-semibold text-card3"
-                        >
-                          Delete
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setConfirmDeleteTag(null)}
-                          className="flex-1 cursor-pointer rounded-lg border border-rule px-2 py-1.5 text-xs"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <MenuButton
-                      icon={<TrashIcon className="size-3.5" />}
-                      onClick={() => setConfirmDeleteTag(tag.id)}
-                      danger
-                    >
-                      Delete
-                    </MenuButton>
-                  )}
+                  <MenuButton
+                    icon={<TagIcon className="size-3.5" />}
+                    onClick={() => setTagModal({ mode: "rename", tag })}
+                  >
+                    Rename
+                  </MenuButton>
+                  <MenuButton
+                    icon={<TrashIcon className="size-3.5" />}
+                    onClick={() => setDeleteTarget({ kind: "tag", id: tag.id, name: tag.name })}
+                    danger
+                  >
+                    Delete
+                  </MenuButton>
                 </div>
               </Popover>
             </div>
@@ -668,6 +479,56 @@ export function Sidebar({
           </button>
         </div>
       </div>
+
+      <ListModal
+        open={listModal !== null}
+        onClose={() => setListModal(null)}
+        parentId={listModal?.mode === "create" ? listModal.parentId : undefined}
+        list={listModal?.mode === "rename" ? listModal.list : undefined}
+        onSubmit={(input) => {
+          if (listModal?.mode === "rename") {
+            updateList.mutate({
+              id: listModal.list.id,
+              input: {
+                name: input.name,
+                color: input.color,
+                icon: input.icon,
+                parentId: listModal.list.parentId,
+              },
+            });
+          } else {
+            createList.mutate(input);
+          }
+        }}
+      />
+
+      <TagModal
+        open={tagModal !== null}
+        onClose={() => setTagModal(null)}
+        tag={tagModal?.mode === "rename" ? tagModal.tag : undefined}
+        onSubmit={(name) => {
+          if (tagModal?.mode === "rename") updateTag.mutate({ id: tagModal.tag.id, name });
+          else createTag.mutate(name);
+        }}
+      />
+
+      <ConfirmModal
+        open={deleteTarget !== null}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => {
+          if (!deleteTarget) return;
+          if (deleteTarget.kind === "list") deleteList.mutate(deleteTarget.id);
+          else deleteTag.mutate(deleteTarget.id);
+        }}
+        title={`Delete ${deleteTarget?.kind === "list" ? "list" : "tag"}`}
+        message={
+          deleteTarget?.kind === "list"
+            ? deleteTarget.hasChildren
+              ? `"${deleteTarget.name}" and its sub-lists will move to the root, its tasks to the inbox.`
+              : `Tasks in "${deleteTarget.name}" will move to the inbox.`
+            : `Remove tag "${deleteTarget?.name}" from all tasks?`
+        }
+      />
     </div>
   );
 }

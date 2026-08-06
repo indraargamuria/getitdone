@@ -9,6 +9,7 @@ import {
 } from "@getitdone/shared";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "../lib/cn";
+import { ListIconGlyph } from "../lib/listIcons";
 import { CalendarIcon, FlagIcon, RepeatIcon, TagIcon, XIcon } from "./icons";
 
 /* --------------------------------- popover --------------------------------- */
@@ -226,10 +227,10 @@ export function ListPicker({
           indentLevel={depth}
           icon={
             <span
-              className="grid size-3.5 place-items-center rounded-full text-[9px] text-card3"
+              className="grid size-3.5 place-items-center rounded-full text-card3"
               style={{ background: list.color }}
             >
-              {list.icon ?? ""}
+              {list.icon ? <ListIconGlyph icon={list.icon} className="size-2.5" /> : null}
             </span>
           }
         >
@@ -259,7 +260,7 @@ export function ListPicker({
                     className="grid size-4 place-items-center rounded-full text-card3"
                     style={{ background: list?.color ?? "var(--ink-faint)" }}
                   >
-                    <span className="text-[9px]">{list?.icon ?? ""}</span>
+                    {list?.icon ? <ListIconGlyph icon={list.icon} className="size-3" /> : null}
                   </span>
                   <span className="flex-1 truncate text-left text-ink">
                     {list?.name ?? "Unknown list"}

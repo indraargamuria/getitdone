@@ -181,12 +181,17 @@
   0% { background-position: -200% 0; }
   100% { background-position: 200% 0; }
 }
+@keyframes pop {
+  from { opacity: 0; transform: scale(0.96) translateY(8px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
 
 .anim-fade-up { animation: fade-up 0.5s var(--ease-spring) both; }
 .anim-fade-in { animation: fade-in 0.4s ease both; }
 .anim-drawer { animation: slide-in-right 0.32s var(--ease-spring) both; }
 .anim-sheet { animation: slide-up 0.32s var(--ease-spring) both; }
 .anim-toast { animation: toast-in 0.34s var(--ease-spring) both; }
+.anim-pop { animation: pop 0.28s var(--ease-spring) both; }
 
 .stagger > * {
   animation: fade-up 0.45s var(--ease-spring) both;
