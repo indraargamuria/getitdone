@@ -28,4 +28,5 @@ Guidance for AI coding agents working in this repository.
 
 - API: `pnpm --filter @getitdone/api deploy:production` (worker `getitdone-api-production`, prod D1 `getitdone-db`).
 - Web: build with `VITE_API_URL` pointing at the API worker, then `wrangler pages deploy` the `dist/` to Pages project `getitdone` (custom domain `getitdone.arga-automation.xyz`).
+- **Gotcha:** `pnpm --filter <pkg> exec` runs the command with cwd set to that package's dir. When deploying web from the API workspace's wrangler, pass an **absolute path** to `apps/web/dist`, e.g. `pnpm --filter @getitdone/api exec wrangler pages deploy "D:\As a Software Engineer\getitdone\apps\web\dist" --project-name getitdone`. A relative `dist` resolves to `apps/api/dist` (the worker build) and deploys broken output.
 - Production vars live in `apps/api/wrangler.toml` under `[env.production]` (`APP_ENV`, `CORS_ORIGIN`; D1 ids). Redeploy the API after changing them.
