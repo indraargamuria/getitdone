@@ -1,6 +1,6 @@
 import { formatMonthYear, startOfToday } from "@getitdone/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useLocation, useParams, useSearchParams } from "react-router";
 import {
   CalendarIcon,
@@ -14,7 +14,7 @@ import {
 } from "../components/icons";
 import { QuickAdd } from "../components/QuickAdd";
 import { TaskList } from "../components/TaskList";
-import { EmptyState, useToast } from "../components/ui";
+import { EmptyState, Toggle, useToast } from "../components/ui";
 import { bootstrapApi, type TaskQuery, type TaskWithRelations, tasksApi } from "../lib/api";
 import { invalidateBootstrap, invalidateTasks } from "../lib/mutations";
 import { useTaskContext } from "./AppShell";
@@ -158,11 +158,18 @@ export default function ViewPage() {
   const { openTask } = useTaskContext();
 
   const bootstrap = useQuery({ queryKey: ["bootstrap"], queryFn: bootstrapApi, retry: false });
-  const tasksKey = useMemo(() => ["tasks", cfg.query] as const, [cfg.query]);
+  const [showCompleted, setShowCompleted] = useState(false);
+
+  const query = useMemo(() => {
+    const q = { ...cfg.query };
+    if (cfg.kind === "list") q.includeCompleted = showCompleted;
+    return q;
+  }, [cfg.query, cfg.kind, showCompleted]);
+  const tasksKey = useMemo(() => ["tasks", query] as const, [query]);
 
   const tasksQuery = useQuery({
     queryKey: tasksKey,
-    queryFn: () => tasksApi.list(cfg.query),
+    queryFn: () => tasksApi.list(query),
     enabled: cfg.kind !== "search" || q.trim().length > 0,
   });
 
@@ -243,6 +250,11 @@ export default function ViewPage() {
             <p className="mb-1 hidden font-mono text-[11px] uppercase tracking-[0.18em] text-inkfaint tabnum sm:block">
               {count} open
             </p>
+          ) : null}
+          {cfg.kind === "list" ? (
+            <div className="mb-1 shrink-0">
+              <Toggle checked={showCompleted} onChange={setShowCompleted} label="Show completed" />
+            </div>
           ) : null}
         </div>
         {cfg.sub ? <p className="mt-1 text-sm text-inkdim">{cfg.sub}</p> : null}

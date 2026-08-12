@@ -215,3 +215,40 @@ export function IconButton({
     </button>
   );
 }
+
+/* ---------------------------------- toggle --------------------------------- */
+
+export function Toggle({
+  checked,
+  onChange,
+  label,
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={() => onChange(!checked)}
+      className="flex cursor-pointer items-center gap-2 text-xs font-medium text-inkdim transition-colors hover:text-ink"
+    >
+      <span
+        className={cn(
+          "relative h-5 w-9 shrink-0 rounded-full border transition-colors",
+          checked ? "border-accent bg-accent" : "border-rulestrong bg-card2",
+        )}
+      >
+        <span
+          className={cn(
+            "absolute top-0.5 size-3.5 rounded-full bg-card3 shadow-sm transition-all",
+            checked ? "left-[18px]" : "left-0.5",
+          )}
+        />
+      </span>
+      {label}
+    </button>
+  );
+}

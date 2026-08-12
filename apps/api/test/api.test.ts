@@ -376,6 +376,32 @@ describe("tasks", () => {
     expect(status).toBe(200);
   });
 
+  it("filters completed tasks out of a list view unless included", async () => {
+    const list = await json(
+      await request("/api/lists", { method: "POST", body: { name: "Filter Me" }, cookie: sessionCookie }),
+    );
+    const listId = list.body.list?.id;
+    const t = await json(
+      await request("/api/tasks", {
+        method: "POST",
+        body: { title: "filtered done", listId },
+        cookie: sessionCookie,
+      }),
+    );
+    const taskId3 = t.body.task?.id;
+    await request(`/api/tasks/${taskId3}/complete`, {
+      method: "POST",
+      body: { completed: true },
+      cookie: sessionCookie,
+    });
+    const hidden = await json(await request(`/api/tasks?listId=${listId}`, { cookie: sessionCookie }));
+    expect(hidden.body.tasks.some((x: { id: string }) => x.id === taskId3)).toBe(false);
+    const shown = await json(
+      await request(`/api/tasks?listId=${listId}&includeCompleted=true`, { cookie: sessionCookie }),
+    );
+    expect(shown.body.tasks.some((x: { id: string }) => x.id === taskId3)).toBe(true);
+  });
+
   it("edits and deletes a task", async () => {
     const { body } = await json(
       await request(`/api/tasks/${taskId2}`, {

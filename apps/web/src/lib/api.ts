@@ -77,6 +77,7 @@ export interface TaskQuery {
   listId?: string;
   tagId?: string;
   q?: string;
+  includeCompleted?: boolean;
 }
 
 function toQuery(q: TaskQuery): string {
@@ -85,6 +86,8 @@ function toQuery(q: TaskQuery): string {
   if (q.listId) params.set("listId", q.listId);
   if (q.tagId) params.set("tagId", q.tagId);
   if (q.q) params.set("q", q.q);
+  if (typeof q.includeCompleted === "boolean")
+    params.set("includeCompleted", String(q.includeCompleted));
   const s = params.toString();
   return s ? `?${s}` : "";
 }
