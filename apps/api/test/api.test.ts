@@ -172,6 +172,35 @@ describe("lists + tags", () => {
     expect(body.tags.length).toBeGreaterThan(0);
     expect(body.counts).toHaveProperty("today");
   });
+
+  it("reports open/completed counts per list", async () => {
+    const created = await json(
+      await request("/api/lists", { method: "POST", body: { name: "Count Me" }, cookie: sessionCookie }),
+    );
+    const listId = created.body.list?.id;
+    const t1 = await json(
+      await request("/api/tasks", {
+        method: "POST",
+        body: { title: "open task", listId },
+        cookie: sessionCookie,
+      }),
+    );
+    const t2 = await json(
+      await request("/api/tasks", {
+        method: "POST",
+        body: { title: "done task", listId },
+        cookie: sessionCookie,
+      }),
+    );
+    await request(`/api/tasks/${t2.body.task?.id}/complete`, {
+      method: "POST",
+      body: { completed: true },
+      cookie: sessionCookie,
+    });
+    const { body } = await json(await request("/api/bootstrap", { cookie: sessionCookie }));
+    expect(body.listCounts[listId]).toEqual({ open: 1, completed: 1 });
+    expect(body.listCounts[t1.body.task?.id]).toBeUndefined();
+  });
 });
 
 describe("nested lists", () => {

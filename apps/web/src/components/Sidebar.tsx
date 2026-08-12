@@ -176,6 +176,7 @@ export function Sidebar({
     const siblings = childrenOf.get(parentKey) ?? [];
     return siblings.map((list, index) => {
       const hasChildren = (childrenOf.get(list.id) ?? []).length > 0;
+      const counts = data.listCounts[list.id];
       return (
         <div key={list.id}>
           <div className="group relative flex items-center">
@@ -203,6 +204,20 @@ export function Sidebar({
                 )}
               </span>
               <span className="truncate">{list.name}</span>
+              {counts && (counts.open > 0 || counts.completed > 0) ? (
+                <span
+                  title={`${counts.open} open · ${counts.completed} completed`}
+                  className="shrink-0 rounded-md bg-card2 px-1.5 py-0.5 font-mono text-[10.5px] tabnum"
+                >
+                  <span className={counts.open > 0 ? "text-ink" : "text-inkfaint"}>
+                    {counts.open}
+                  </span>
+                  <span className="text-inkfaint/60">/</span>
+                  <span className={counts.completed > 0 ? "text-inkfaint" : "text-inkfaint/50"}>
+                    {counts.completed}
+                  </span>
+                </span>
+              ) : null}
             </NavLink>
             <Popover
               trigger={() => (

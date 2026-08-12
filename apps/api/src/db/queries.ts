@@ -589,6 +589,72 @@ export async function setTaskCompleted(
   return result;
 }
 
+export interface ListCounts {
+  open: number;
+  completed: number;
+}
+
+/**
+ * Open/completed task counts for every list, including tasks in descendant
+ * sub-lists (matching what the list view shows).
+ */
+export async function listCountsByList(
+  db: DB,
+  userId: string,
+): Promise<Record<string, ListCounts>> {
+  const listRows = await db
+    .select({ id: lists.id, parentId: lists.parentId })
+    .from(lists)
+    .where(eq(lists.userId, userId));
+  const childrenOf = new Map<string, string[]>();
+  for (const r of listRows) {
+    if (!r.parentId) continue;
+    const arr = childrenOf.get(r.parentId) ?? [];
+    arr.push(r.id);
+    childrenOf.set(r.parentId, arr);
+  }
+
+  const withDescendants = new Map<string, string[]>();
+  for (const l of listRows) {
+    const out: string[] = [];
+    const stack = [l.id];
+    while (stack.length > 0) {
+      const cur = stack.pop()!;
+      out.push(cur);
+      for (const child of childrenOf.get(cur) ?? []) stack.push(child);
+    }
+    withDescendants.set(l.id, out);
+  }
+
+  const taskRows = await db
+    .select({ listId: tasks.listId, completedAt: tasks.completedAt })
+    .from(tasks)
+    .where(eq(tasks.userId, userId));
+  const direct = new Map<string, ListCounts>();
+  for (const t of taskRows) {
+    if (!t.listId) continue;
+    const c = direct.get(t.listId) ?? { open: 0, completed: 0 };
+    if (t.completedAt) c.completed += 1;
+    else c.open += 1;
+    direct.set(t.listId, c);
+  }
+
+  const result: Record<string, ListCounts> = {};
+  for (const l of listRows) {
+    let open = 0;
+    let completed = 0;
+    for (const id of withDescendants.get(l.id) ?? []) {
+      const c = direct.get(id);
+      if (c) {
+        open += c.open;
+        completed += c.completed;
+      }
+    }
+    result[l.id] = { open, completed };
+  }
+  return result;
+}
+
 export async function reorderTasks(db: DB, userId: string, orderedIds: string[]): Promise<void> {
   for (let idx = 0; idx < orderedIds.length; idx++) {
     await db

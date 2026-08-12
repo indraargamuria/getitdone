@@ -63,6 +63,7 @@ export interface Bootstrap {
   lists: List[];
   tags: Tag[];
   counts: { today: number; week: number; inbox: number; all: number; completed: number };
+  listCounts: Record<string, { open: number; completed: number }>;
 }
 
 export interface TaskListResponse {
