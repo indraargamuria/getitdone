@@ -158,7 +158,7 @@ export default function ViewPage() {
   const { openTask } = useTaskContext();
 
   const bootstrap = useQuery({ queryKey: ["bootstrap"], queryFn: bootstrapApi, retry: false });
-  const [showCompleted, setShowCompleted] = useState(false);
+  const [showCompleted, setShowCompleted] = useState(true);
 
   const query = useMemo(() => {
     const q = { ...cfg.query };
