@@ -1,8 +1,8 @@
-import { daysFromToday, humanDueLabel, humanTime } from "@getitdone/shared";
+import { daysFromToday, humanDateLabel, humanDueLabel, humanTime } from "@getitdone/shared";
 import { memo } from "react";
 import type { TaskWithRelations } from "../lib/api";
 import { cn } from "../lib/cn";
-import { FlagIcon, GripIcon, RepeatIcon } from "./icons";
+import { CheckIcon, FlagIcon, GripIcon, RepeatIcon } from "./icons";
 import { Checkbox } from "./ui";
 
 function DueChip({ task }: { task: TaskWithRelations }) {
@@ -96,6 +96,12 @@ export const TaskItem = memo(function TaskItem({
 
         <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 pl-0">
           <DueChip task={task} />
+          {task.completedAt ? (
+            <span className="inline-flex items-center gap-1 rounded-md bg-ok/10 px-1.5 py-0.5 text-[11px] font-medium text-ok">
+              <CheckIcon className="size-3" strokeWidth={2.4} />
+              Done {humanDateLabel(task.completedAt)}
+            </span>
+          ) : null}
           {task.recurrence ? (
             <RepeatIcon className="size-3 text-inkfaint" aria-label="Repeats" />
           ) : null}

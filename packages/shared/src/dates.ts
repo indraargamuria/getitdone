@@ -121,6 +121,17 @@ export function formatMonthYear(d = new Date()): string {
   return `${MONTH_LONG[d.getMonth()]} ${d.getFullYear()}`;
 }
 
+/** Friendly label for an ISO timestamp's date: "Today", "Yesterday", "Aug 12". */
+export function humanDateLabel(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const dateStr = toDateStr(d);
+  const diff = daysFromToday(dateStr);
+  if (diff === 0) return "Today";
+  if (diff === -1) return "Yesterday";
+  return `${DAY_SHORT[d.getMonth()]} ${d.getDate()}`;
+}
+
 /** "HH:mm" -> local 12h display. */
 export function humanTime(timeStr: string): string {
   const [h, m] = timeStr.split(":").map(Number);

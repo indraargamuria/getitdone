@@ -365,6 +365,27 @@ describe("tasks", () => {
     expect(ids).not.toContain(taskId);
   });
 
+  it("saves the completion date on the task", async () => {
+    const done = await json(
+      await request(`/api/tasks/${taskId}/complete`, {
+        method: "POST",
+        body: { completed: true },
+        cookie: sessionCookie,
+      }),
+    );
+    expect(done.status).toBe(200);
+    expect(done.body.task?.completedAt).toBeTruthy();
+    expect(Number.isNaN(Date.parse(done.body.task.completedAt))).toBe(false);
+    const reopened = await json(
+      await request(`/api/tasks/${taskId}/complete`, {
+        method: "POST",
+        body: { completed: false },
+        cookie: sessionCookie,
+      }),
+    );
+    expect(reopened.body.task?.completedAt).toBeNull();
+  });
+
   it("reopens a completed task", async () => {
     const { status } = await json(
       await request(`/api/tasks/${taskId}/complete`, {
