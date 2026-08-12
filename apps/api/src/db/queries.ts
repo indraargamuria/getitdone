@@ -664,6 +664,47 @@ export async function reorderTasks(db: DB, userId: string, orderedIds: string[])
   }
 }
 
+export async function reportSummary(db: DB, userId: string) {
+  const [listRows, taskRows] = await Promise.all([
+    db
+      .select()
+      .from(lists)
+      .where(eq(lists.userId, userId))
+      .orderBy(asc(lists.sortOrder), asc(lists.name)),
+    db
+      .select({ listId: tasks.listId, completedAt: tasks.completedAt })
+      .from(tasks)
+      .where(eq(tasks.userId, userId)),
+  ]);
+
+  let total = 0;
+  let open = 0;
+  let completed = 0;
+  let inbox = 0;
+  const perList = new Map<string, { open: number; completed: number }>();
+  for (const t of taskRows) {
+    total += 1;
+    if (t.completedAt) completed += 1;
+    else {
+      open += 1;
+      if (!t.listId) inbox += 1;
+    }
+    if (t.listId) {
+      const c = perList.get(t.listId) ?? { open: 0, completed: 0 };
+      if (t.completedAt) c.completed += 1;
+      else c.open += 1;
+      perList.set(t.listId, c);
+    }
+  }
+
+  const byList = listRows.map((l) => {
+    const c = perList.get(l.id) ?? { open: 0, completed: 0 };
+    return { list: toList(l), open: c.open, completed: c.completed, total: c.open + c.completed };
+  });
+
+  return { totals: { total, open, completed, inbox }, byList };
+}
+
 export async function addTaskTag(
   db: DB,
   userId: string,

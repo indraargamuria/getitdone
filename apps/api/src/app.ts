@@ -6,6 +6,7 @@ import { getDb, listCounts, listCountsByList, listLists, listTags } from "./db/q
 import { csrfGuard, sessionMiddleware } from "./middleware";
 import { authRoutes } from "./routes/auth";
 import { listRoutes } from "./routes/lists";
+import { reportRoutes } from "./routes/reports";
 import { tagRoutes } from "./routes/tags";
 import { taskRoutes } from "./routes/tasks";
 import type { AppContext, DBEnv } from "./types";
@@ -62,6 +63,7 @@ export function createApp(env: DBEnv) {
   app.route("/api/lists", listRoutes);
   app.route("/api/tags", tagRoutes);
   app.route("/api/tasks", taskRoutes);
+  app.route("/api/reports", reportRoutes);
 
   app.notFound((c) => c.json({ error: "Not found" }, 404));
 

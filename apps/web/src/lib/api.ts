@@ -1,6 +1,7 @@
 import type {
   List,
   ListInput,
+  ReportSummary,
   Subtask,
   Tag,
   TagInput,
@@ -102,6 +103,10 @@ export const authApi = {
 };
 
 export const bootstrapApi = () => api<Bootstrap>("/api/bootstrap");
+
+export const reportsApi = {
+  summary: () => api<ReportSummary>("/api/reports"),
+};
 
 export const listsApi = {
   list: () => api<{ lists: List[] }>("/api/lists"),

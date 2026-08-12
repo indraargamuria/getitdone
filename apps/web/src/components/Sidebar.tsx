@@ -11,6 +11,7 @@ import { invalidateAll } from "../lib/mutations";
 import { Popover } from "./fields";
 import {
   CalendarIcon,
+  ChartIcon,
   CheckIcon,
   ChevronDownIcon,
   ChevronUpIcon,
@@ -357,6 +358,7 @@ export function Sidebar({
             count={data.counts.completed}
             end
           />
+          <NavItem to="/reports" icon={<ChartIcon className="size-5" />} label="Reports" end />
         </div>
 
         <SectionLabel>

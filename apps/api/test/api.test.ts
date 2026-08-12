@@ -480,6 +480,44 @@ describe("health", () => {
   });
 });
 
+describe("reports", () => {
+  it("summarizes totals and per-list status", async () => {
+    const list = await json(
+      await request("/api/lists", { method: "POST", body: { name: "Report List" }, cookie: sessionCookie }),
+    );
+    const listId = list.body.list?.id;
+    await request("/api/tasks", {
+      method: "POST",
+      body: { title: "open", listId },
+      cookie: sessionCookie,
+    });
+    const done = await json(
+      await request("/api/tasks", {
+        method: "POST",
+        body: { title: "done", listId },
+        cookie: sessionCookie,
+      }),
+    );
+    await request(`/api/tasks/${done.body.task?.id}/complete`, {
+      method: "POST",
+      body: { completed: true },
+      cookie: sessionCookie,
+    });
+
+    const res = await json(await request("/api/reports", { cookie: sessionCookie }));
+    expect(res.status).toBe(200);
+    expect(res.body.totals).toMatchObject({ open: expect.any(Number), completed: expect.any(Number) });
+    expect(res.body.totals.total).toBe(res.body.totals.open + res.body.totals.completed);
+    const row = res.body.byList.find((r: { list: { id: string } }) => r.list.id === listId);
+    expect(row).toEqual({ list: expect.any(Object), open: 1, completed: 1, total: 2 });
+  });
+
+  it("rejects reports without a session", async () => {
+    const res = await json(await request("/api/reports"));
+    expect(res.status).toBe(401);
+  });
+});
+
 describe("session", () => {
   it("logs out and invalidates the session", async () => {
     const { status } = await json(

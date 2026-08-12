@@ -1,6 +1,7 @@
 import { createBrowserRouter, Navigate, RouterProvider } from "react-router";
 import AppShell from "./pages/AppShell";
 import LoginPage from "./pages/LoginPage";
+import ReportsPage from "./pages/ReportsPage";
 import ViewPage from "./pages/ViewPage";
 
 const router = createBrowserRouter([
@@ -18,6 +19,7 @@ const router = createBrowserRouter([
       { path: "list/:id", element: <ViewPage /> },
       { path: "tag/:id", element: <ViewPage /> },
       { path: "search", element: <ViewPage /> },
+      { path: "reports", element: <ReportsPage /> },
       { path: "*", element: <Navigate to="/today" replace /> },
     ],
   },

@@ -144,6 +144,23 @@ export const taskTagInputSchema = z.object({
   tagId: ID,
 });
 
+export const reportSummarySchema = z.object({
+  totals: z.object({
+    total: z.number(),
+    open: z.number(),
+    completed: z.number(),
+    inbox: z.number(),
+  }),
+  byList: z.array(
+    z.object({
+      list: listSchema,
+      open: z.number(),
+      completed: z.number(),
+      total: z.number(),
+    }),
+  ),
+});
+
 export type User = z.infer<typeof userSchema>;
 export type Session = z.infer<typeof sessionSchema>;
 export type List = z.infer<typeof listSchema>;
@@ -154,6 +171,7 @@ export type Subtask = z.infer<typeof subtaskSchema>;
 export type Task = z.infer<typeof taskSchema>;
 export type TaskInput = z.infer<typeof taskInputSchema>;
 export type TaskCreateInput = z.infer<typeof taskCreateInputSchema>;
+export type ReportSummary = z.infer<typeof reportSummarySchema>;
 
 export function newId(): string {
   return crypto.randomUUID();

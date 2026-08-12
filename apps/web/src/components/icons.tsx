@@ -186,3 +186,10 @@ export const SparkIcon = (p: P) => (
     <path d="M19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8L19 16Z" />
   </svg>
 );
+
+export const ChartIcon = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M3 3v18h18" />
+    <path d="M8 17v-5m5 5V7m5 10v-8" />
+  </svg>
+);
