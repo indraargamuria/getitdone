@@ -62,7 +62,7 @@ export default function AppShell() {
   return (
     <TaskContext.Provider value={{ openTask: setSelectedId }}>
       <div className="paper-grain min-h-dvh">
-        <aside className="fixed inset-y-0 left-0 z-40 hidden w-[264px] border-r border-rule bg-paper/70 backdrop-blur-xl md:block">
+        <aside className="fixed inset-y-0 left-0 z-40 hidden w-[300px] border-r border-rule bg-paper/70 backdrop-blur-xl md:block">
           <Sidebar
             data={data}
             user={user}
@@ -93,7 +93,7 @@ export default function AppShell() {
 
         <MobileHeader onMenu={() => setMobileOpen(true)} onSearch={() => setSearchOpen(true)} />
 
-        <main className="pb-16 md:pb-10 md:pl-[264px]">
+        <main className="pb-16 md:pb-10 md:pl-[300px]">
           <Outlet />
         </main>
 

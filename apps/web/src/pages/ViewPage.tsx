@@ -181,6 +181,11 @@ export default function ViewPage() {
   const list = bootstrap.data?.lists.find((l) => l.id === id);
   const tag = bootstrap.data?.tags.find((t) => t.id === id);
 
+  const listById = useMemo(
+    () => new Map((bootstrap.data?.lists ?? []).map((l) => [l.id, l])),
+    [bootstrap.data?.lists],
+  );
+
   const resolvedTitle =
     cfg.kind === "list"
       ? (list?.name ?? "List")
@@ -367,6 +372,7 @@ export default function ViewPage() {
             }
             onReorder={handleReorder}
             sortable={cfg.kind !== "search" && cfg.smart !== "completed"}
+            getList={cfg.kind === "list" ? undefined : (listId) => listById.get(listId)}
           />
         )}
       </div>

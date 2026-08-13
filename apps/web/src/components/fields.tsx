@@ -16,6 +16,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { createPortal } from "react-dom";
 import { cn } from "../lib/cn";
 import { ListIconGlyph } from "../lib/listIcons";
 import { CalendarIcon, FlagIcon, RepeatIcon, TagIcon, UserIcon, XIcon } from "./icons";
@@ -28,7 +29,7 @@ export function Popover({
   align = "end",
   width = "w-72",
   place = "bottom",
-  z = "z-40",
+  z = "z-[60]",
   onOpenChange,
 }: {
   trigger: (open: boolean) => ReactNode;
@@ -42,7 +43,7 @@ export function Popover({
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState<{ top?: number; bottom?: number; left: number } | null>(null);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
 
   const position = useCallback(() => {
     const host = ref.current;
@@ -63,14 +64,8 @@ export function Popover({
     }
     let left = align === "end" ? hr.right - pr.width : hr.left;
     left = Math.max(m, Math.min(left, window.innerWidth - pr.width - m));
-    const next: { top?: number; bottom?: number; left: number } = below
-      ? { top: hr.height + m, left: left - hr.left }
-      : { bottom: hr.height + m, left: left - hr.left };
-    setPos((prev) =>
-      prev && prev.left === next.left && prev.top === next.top && prev.bottom === next.bottom
-        ? prev
-        : next,
-    );
+    const top = below ? hr.bottom + m : hr.top - pr.height - m;
+    setPos((prev) => (prev && prev.top === top && prev.left === left ? prev : { top, left }));
   }, [place, align]);
 
   useLayoutEffect(() => {
@@ -92,7 +87,9 @@ export function Popover({
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      const inside = ref.current?.contains(target) || panelRef.current?.contains(target);
+      if (!inside) setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setOpen(false);
@@ -117,19 +114,22 @@ export function Popover({
       >
         {trigger(open)}
       </div>
-      {open ? (
-        <div
-          ref={panelRef}
-          style={pos ?? undefined}
-          className={cn(
-            "anim-fade-in absolute rounded-xl border border-rule bg-card3 p-2 shadow-lift",
-            width,
-            z,
-          )}
-        >
-          {children}
-        </div>
-      ) : null}
+      {open
+        ? createPortal(
+            <div
+              ref={panelRef}
+              style={pos ?? { top: -9999, left: -9999 }}
+              className={cn(
+                "anim-fade-in fixed rounded-xl border border-rule bg-card3 p-2 shadow-lift",
+                width,
+                z,
+              )}
+            >
+              {children}
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }
@@ -532,15 +532,54 @@ export function AssigneeField({
   const [text, setText] = useState(value ?? "");
   const [show, setShow] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null);
 
   useEffect(() => {
     setText(value ?? "");
   }, [value]);
 
+  const position = useCallback(() => {
+    const host = ref.current;
+    const panel = panelRef.current;
+    if (!host || !panel) return;
+    const hr = host.getBoundingClientRect();
+    const pr = panel.getBoundingClientRect();
+    const m = 4;
+    let top = hr.bottom + m;
+    if (top + pr.height > window.innerHeight - m && hr.top - pr.height - m >= 0) {
+      top = hr.top - pr.height - m;
+    }
+    const left = Math.max(m, Math.min(hr.left, window.innerWidth - pr.width - m));
+    setPos((prev) =>
+      prev && prev.top === top && prev.left === left && prev.width === hr.width
+        ? prev
+        : { top, left, width: hr.width },
+    );
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!show) return;
+    position();
+  }, [show, position]);
+
+  useEffect(() => {
+    if (!show) return;
+    const measure = () => position();
+    window.addEventListener("resize", measure);
+    document.addEventListener("scroll", measure, true);
+    return () => {
+      window.removeEventListener("resize", measure);
+      document.removeEventListener("scroll", measure, true);
+    };
+  }, [show, position]);
+
   useEffect(() => {
     if (!show) return;
     const onDown = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setShow(false);
+      const target = e.target as Node;
+      const inside = ref.current?.contains(target) || panelRef.current?.contains(target);
+      if (!inside) setShow(false);
     };
     document.addEventListener("mousedown", onDown);
     return () => document.removeEventListener("mousedown", onDown);
@@ -553,7 +592,7 @@ export function AssigneeField({
   );
 
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref}>
       <div className="flex items-center gap-2 rounded-xl border border-rule bg-card px-3 py-2 transition-colors focus-within:border-accent">
         <UserIcon className="size-4 shrink-0 text-inkdim" />
         <input
@@ -583,25 +622,32 @@ export function AssigneeField({
           </button>
         ) : null}
       </div>
-      {show && matches.length > 0 ? (
-        <div className="absolute left-0 right-0 top-full z-10 mt-1 max-h-48 overflow-y-auto rounded-xl border border-rule bg-card3 p-1 shadow-lift">
-          {matches.map((name) => (
-            <button
-              key={name}
-              type="button"
-              onClick={() => {
-                setText(name);
-                setShow(false);
-                onChange(name);
-              }}
-              className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm text-inkdim transition-colors hover:bg-card2 hover:text-ink"
+      {show && matches.length > 0
+        ? createPortal(
+            <div
+              ref={panelRef}
+              style={pos ?? { top: -9999, left: -9999, width: 0 }}
+              className="fixed z-[60] max-h-48 overflow-y-auto rounded-xl border border-rule bg-card3 p-1 shadow-lift"
             >
-              <UserIcon className="size-3.5" />
-              <span className="flex-1 truncate">{name}</span>
-            </button>
-          ))}
-        </div>
-      ) : null}
+              {matches.map((name) => (
+                <button
+                  key={name}
+                  type="button"
+                  onClick={() => {
+                    setText(name);
+                    setShow(false);
+                    onChange(name);
+                  }}
+                  className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm text-inkdim transition-colors hover:bg-card2 hover:text-ink"
+                >
+                  <UserIcon className="size-3.5" />
+                  <span className="flex-1 truncate">{name}</span>
+                </button>
+              ))}
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }

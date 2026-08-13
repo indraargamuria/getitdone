@@ -48,6 +48,7 @@ export function TaskDetail({
   const [notes, setNotes] = useState(task.notes ?? "");
   const notesRef = useRef(notes);
   const notesTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const notesAreaRef = useRef<HTMLTextAreaElement>(null);
   const [due, setDue] = useState<DateTimeValue>({ date: task.dueDate, time: task.dueTime });
   const [priority, setPriority] = useState<number>(task.priority);
   const [listId, setListId] = useState<string | null>(task.listId);
@@ -91,6 +92,13 @@ export function TaskDetail({
     },
     [],
   );
+
+  useEffect(() => {
+    const el = notesAreaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, []);
 
   const toggleComplete = useMutation({
     mutationFn: () => tasksApi.complete(task.id, !completed),
@@ -290,17 +298,22 @@ export function TaskDetail({
                 <span className="font-mono text-[10px] uppercase tracking-[0.18em]">Notes</span>
               </div>
               <textarea
+                ref={notesAreaRef}
                 value={notes}
                 onChange={(e) => {
-                  setNotes(e.target.value);
-                  notesRef.current = e.target.value;
+                  const v = e.target.value;
+                  setNotes(v);
+                  notesRef.current = v;
+                  const el = e.currentTarget;
+                  el.style.height = "auto";
+                  el.style.height = `${el.scrollHeight}px`;
                   if (notesTimer.current) clearTimeout(notesTimer.current);
-                  notesTimer.current = setTimeout(saveNotes, 600, e.target.value);
+                  notesTimer.current = setTimeout(saveNotes, 600, v);
                 }}
                 onBlur={flushNotes}
-                rows={4}
+                rows={8}
                 placeholder="Details, links, context…"
-                className="w-full resize-none bg-transparent px-3 pb-3 text-sm leading-relaxed text-ink outline-none placeholder:text-inkfaint"
+                className="max-h-80 w-full resize-none overflow-y-auto bg-transparent px-3 pb-3 text-sm leading-relaxed text-ink outline-none placeholder:text-inkfaint"
               />
             </div>
           </Section>

@@ -82,6 +82,7 @@ export const TaskItem = memo(function TaskItem({
   onToggleComplete,
   onToggleSubtask,
   dragProps,
+  list,
 }: {
   task: TaskWithRelations;
   active: boolean;
@@ -97,6 +98,7 @@ export const TaskItem = memo(function TaskItem({
     isOver: boolean;
     isDragging: boolean;
   };
+  list?: { name: string; color: string };
 }) {
   const { done: subDone, total: subTotal } = subtaskProgress(task.subtasks);
   const hasSubtasks = task.subtasks.length > 0;
@@ -155,6 +157,15 @@ export const TaskItem = memo(function TaskItem({
         ) : null}
 
         <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 pl-0">
+          {list ? (
+            <span
+              title={`List: ${list.name}`}
+              className="inline-flex items-center gap-1.5 rounded-md bg-card2 px-1.5 py-0.5 text-[11px] font-medium text-inkdim"
+            >
+              <span className="size-2 rounded-full" style={{ background: list.color }} />
+              {list.name}
+            </span>
+          ) : null}
           <DueChip task={task} />
           {task.assignee ? (
             <span

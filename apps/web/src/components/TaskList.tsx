@@ -1,4 +1,4 @@
-import { effectiveTaskDone } from "@getitdone/shared";
+import { effectiveTaskDone, type List } from "@getitdone/shared";
 import { useRef, useState } from "react";
 import type { TaskWithRelations } from "../lib/api";
 import { TaskItem } from "./TaskItem";
@@ -11,6 +11,7 @@ export function TaskList({
   onToggleSubtask,
   onReorder,
   sortable = true,
+  getList,
 }: {
   tasks: TaskWithRelations[];
   activeId?: string | null;
@@ -19,6 +20,7 @@ export function TaskList({
   onToggleSubtask?: (subtaskId: string, completed: boolean) => void;
   onReorder: (orderedIds: string[]) => void;
   sortable?: boolean;
+  getList?: (listId: string) => List | undefined;
 }) {
   const [dragId, setDragId] = useState<string | null>(null);
   const [over, setOver] = useState<{ id: string; pos: "above" | "below" } | null>(null);
@@ -105,6 +107,7 @@ export function TaskList({
                   : undefined
               }
               dragProps={makeDragProps(task.id)}
+              list={task.listId ? getList?.(task.listId) : undefined}
             />
           </li>
         ))}
@@ -131,6 +134,7 @@ export function TaskList({
                       ? (subtaskId, completed) => onToggleSubtask(subtaskId, completed)
                       : undefined
                   }
+                  list={task.listId ? getList?.(task.listId) : undefined}
                 />
               </li>
             ))}
