@@ -7,6 +7,7 @@ export function TaskList({
   activeId,
   onSelect,
   onToggleComplete,
+  onToggleSubtask,
   onReorder,
   sortable = true,
 }: {
@@ -14,6 +15,7 @@ export function TaskList({
   activeId?: string | null;
   onSelect: (id: string) => void;
   onToggleComplete: (id: string) => void;
+  onToggleSubtask?: (subtaskId: string, completed: boolean) => void;
   onReorder: (orderedIds: string[]) => void;
   sortable?: boolean;
 }) {
@@ -96,6 +98,11 @@ export function TaskList({
               active={activeId === task.id}
               onSelect={() => onSelect(task.id)}
               onToggleComplete={() => onToggleComplete(task.id)}
+              onToggleSubtask={
+                onToggleSubtask
+                  ? (subtaskId, completed) => onToggleSubtask(subtaskId, completed)
+                  : undefined
+              }
               dragProps={makeDragProps(task.id)}
             />
           </li>
@@ -118,6 +125,11 @@ export function TaskList({
                   active={activeId === task.id}
                   onSelect={() => onSelect(task.id)}
                   onToggleComplete={() => onToggleComplete(task.id)}
+                  onToggleSubtask={
+                    onToggleSubtask
+                      ? (subtaskId, completed) => onToggleSubtask(subtaskId, completed)
+                      : undefined
+                  }
                 />
               </li>
             ))}

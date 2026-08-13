@@ -518,6 +518,139 @@ describe("reports", () => {
   });
 });
 
+describe("subtask-aware completion", () => {
+  it("creates a long symbolic title", async () => {
+    const title = "🚀 30% off & \"urgent\" deals — #errands @home".repeat(30).slice(0, 499);
+    const { status, body } = await json(
+      await request("/api/tasks", {
+        method: "POST",
+        body: { title },
+        cookie: sessionCookie,
+      }),
+    );
+    expect(status).toBe(201);
+    expect(body.task?.title).toBe(title);
+  });
+
+  it("rejects a title longer than 500 characters", async () => {
+    const { status } = await json(
+      await request("/api/tasks", {
+        method: "POST",
+        body: { title: "a".repeat(501) },
+        cookie: sessionCookie,
+      }),
+    );
+    expect(status).toBe(400);
+  });
+
+  it("counts a parent task as open until all subtasks are done", async () => {
+    const list = await json(
+      await request("/api/lists", { method: "POST", body: { name: "Sub Aware" }, cookie: sessionCookie }),
+    );
+    const listId = list.body.list?.id;
+    const created = await json(
+      await request("/api/tasks", {
+        method: "POST",
+        body: { title: "Ship feature", listId, subtasks: ["Build", "Test"] },
+        cookie: sessionCookie,
+      }),
+    );
+    expect(created.status).toBe(201);
+    const taskId = created.body.task?.id;
+    const [sub1, sub2] = created.body.task?.subtasks ?? [];
+
+    let boot = (await json(await request("/api/bootstrap", { cookie: sessionCookie }))).body;
+    expect(boot.listCounts[listId]).toEqual({ open: 1, completed: 0 });
+
+    await request(`/api/tasks/subtasks/${sub1?.id}/complete`, {
+      method: "POST",
+      body: { completed: true },
+      cookie: sessionCookie,
+    });
+    boot = (await json(await request("/api/bootstrap", { cookie: sessionCookie }))).body;
+    expect(boot.listCounts[listId]).toEqual({ open: 1, completed: 0 });
+
+    await request(`/api/tasks/subtasks/${sub2?.id}/complete`, {
+      method: "POST",
+      body: { completed: true },
+      cookie: sessionCookie,
+    });
+    boot = (await json(await request("/api/bootstrap", { cookie: sessionCookie }))).body;
+    expect(boot.listCounts[listId]).toEqual({ open: 0, completed: 1 });
+    expect(taskId).toBeTruthy();
+  });
+
+  it("completing a parent completes its subtasks and vice versa", async () => {
+    const created = await json(
+      await request("/api/tasks", {
+        method: "POST",
+        body: { title: "Parent toggle", subtasks: ["a", "b"] },
+        cookie: sessionCookie,
+      }),
+    );
+    const taskId = created.body.task?.id;
+
+    const done = await json(
+      await request(`/api/tasks/${taskId}/complete`, {
+        method: "POST",
+        body: { completed: true },
+        cookie: sessionCookie,
+      }),
+    );
+    expect(done.status).toBe(200);
+    expect(
+      done.body.task?.subtasks?.every((s: { completedAt: string | null }) => s.completedAt),
+    ).toBe(true);
+
+    const reopen = await json(
+      await request(`/api/tasks/${taskId}/complete`, {
+        method: "POST",
+        body: { completed: false },
+        cookie: sessionCookie,
+      }),
+    );
+    expect(
+      reopen.body.task?.subtasks?.every((s: { completedAt: string | null }) => !s.completedAt),
+    ).toBe(true);
+  });
+
+  it("rolls sub-list tasks into the parent list report summary", async () => {
+    const parent = await json(
+      await request("/api/lists", { method: "POST", body: { name: "Report Parent" }, cookie: sessionCookie }),
+    );
+    const parentId = parent.body.list?.id;
+    const child = await json(
+      await request("/api/lists", {
+        method: "POST",
+        body: { name: "Report Child", parentId },
+        cookie: sessionCookie,
+      }),
+    );
+    const childId = child.body.list?.id;
+    await request("/api/tasks", {
+      method: "POST",
+      body: { title: "child open", listId: childId },
+      cookie: sessionCookie,
+    });
+    const done = await json(
+      await request("/api/tasks", {
+        method: "POST",
+        body: { title: "child done", listId: childId },
+        cookie: sessionCookie,
+      }),
+    );
+    await request(`/api/tasks/${done.body.task?.id}/complete`, {
+      method: "POST",
+      body: { completed: true },
+      cookie: sessionCookie,
+    });
+
+    const res = await json(await request("/api/reports", { cookie: sessionCookie }));
+    const parentRow = res.body.byList.find((r: { list: { id: string } }) => r.list.id === parentId);
+    expect(parentRow).toEqual({ list: expect.any(Object), open: 1, completed: 1, total: 2 });
+  });
+});
+
 describe("session", () => {
   it("logs out and invalidates the session", async () => {
     const { status } = await json(

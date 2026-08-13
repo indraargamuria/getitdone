@@ -73,6 +73,8 @@ export const subtaskSchema = z.object({
   sortOrder: z.number(),
 });
 
+export const SUBTASK_TITLE_MAX = 200;
+
 export const subtaskInputSchema = z.object({
   title: z.string().trim().min(1).max(200),
   completedAt: z.string().nullable().optional(),
@@ -82,9 +84,11 @@ export const subtaskInputSchema = z.object({
 /** Priority: 1 = highest (P1) … 4 = none (P4). */
 export const prioritySchema = z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]);
 
+export const TASK_TITLE_MAX = 500;
+
 export const taskSchema = z.object({
   id: ID,
-  title: z.string().trim().min(1).max(200),
+  title: z.string().trim().min(1).max(TASK_TITLE_MAX),
   notes: z.string().max(20_000).nullable(),
   listId: ID.nullable(),
   priority: prioritySchema,
@@ -98,7 +102,7 @@ export const taskSchema = z.object({
 });
 
 export const taskInputSchema = z.object({
-  title: z.string().trim().min(1).max(200).optional(),
+  title: z.string().trim().min(1).max(TASK_TITLE_MAX).optional(),
   notes: z.string().max(20_000).nullable().optional(),
   listId: ID.nullable().optional(),
   priority: prioritySchema.optional(),
@@ -118,7 +122,7 @@ export function validateTaskFields(input: {
 }
 
 export const taskCreateInputSchema = taskInputSchema.extend({
-  title: z.string().trim().min(1).max(200),
+  title: z.string().trim().min(1).max(TASK_TITLE_MAX),
   tagIds: z.array(ID).optional(),
   subtasks: z.array(z.string().trim().min(1).max(200)).optional(),
 });
@@ -175,4 +179,37 @@ export type ReportSummary = z.infer<typeof reportSummarySchema>;
 
 export function newId(): string {
   return crypto.randomUUID();
+}
+
+export interface SubtaskLike {
+  completedAt: string | null;
+}
+
+export interface TaskLike {
+  completedAt: string | null;
+  subtasks?: SubtaskLike[];
+}
+
+/**
+ * A task's effective completion. When a task has subtasks, completion is
+ * derived from the lowest level: it counts as done only when every subtask is
+ * done (its own `completedAt` is ignored for counting purposes).
+ */
+export function effectiveTaskDone(task: TaskLike): boolean {
+  const subs = task.subtasks;
+  if (subs && subs.length > 0) return subs.every((s) => s.completedAt);
+  return !!task.completedAt;
+}
+
+/** Progress of a task's subtasks: `{ done, total }` where `total` is the count. */
+export function subtaskProgress(subtasks: SubtaskLike[]): { done: number; total: number } {
+  return {
+    done: subtasks.filter((s) => s.completedAt).length,
+    total: subtasks.length,
+  };
+}
+
+/** 0–100 completion percentage for a set of items (empty set = 0). */
+export function completionPct(done: number, total: number): number {
+  return total === 0 ? 0 : Math.round((done / total) * 100);
 }

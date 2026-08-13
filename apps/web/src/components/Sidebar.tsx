@@ -14,6 +14,7 @@ import {
   ChartIcon,
   CheckIcon,
   ChevronDownIcon,
+  ChevronRightIcon,
   ChevronUpIcon,
   InboxIcon,
   LayersIcon,
@@ -31,6 +32,7 @@ import { ConfirmModal, ListModal, type ListModalInput, TagModal } from "./modals
 import { useToast } from "./ui";
 
 const ROOT_PARENT = "__root__";
+const COLLAPSE_KEY = "gt_collapsed_lists";
 
 function NavItem({
   to,
@@ -117,6 +119,30 @@ export function Sidebar({
     | null
   >(null);
 
+  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(() => {
+    try {
+      const raw = localStorage.getItem(COLLAPSE_KEY);
+      const parsed = raw ? (JSON.parse(raw) as string[]) : [];
+      return new Set(Array.isArray(parsed) ? parsed : []);
+    } catch {
+      return new Set();
+    }
+  });
+
+  function toggleCollapsed(id: string) {
+    setCollapsedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      try {
+        localStorage.setItem(COLLAPSE_KEY, JSON.stringify([...next]));
+      } catch {
+        /* storage unavailable — state still updates for this session */
+      }
+      return next;
+    });
+  }
+
   const lists = data.lists;
   const tags = data.tags;
 
@@ -177,10 +203,35 @@ export function Sidebar({
     const siblings = childrenOf.get(parentKey) ?? [];
     return siblings.map((list, index) => {
       const hasChildren = (childrenOf.get(list.id) ?? []).length > 0;
+      const collapsed = hasChildren && collapsedIds.has(list.id);
       const counts = data.listCounts[list.id];
+      const total = counts ? counts.open + counts.completed : 0;
+      const pct = counts && total > 0 ? Math.round((counts.completed / total) * 100) : 0;
       return (
         <div key={list.id}>
           <div className="group relative flex items-center">
+            <button
+              type="button"
+              onClick={() => toggleCollapsed(list.id)}
+              aria-label={
+                collapsed ? `Show sub-lists of ${list.name}` : `Hide sub-lists of ${list.name}`
+              }
+              title={hasChildren ? (collapsed ? "Show sub-lists" : "Hide sub-lists") : undefined}
+              className={cn(
+                "z-10 grid size-6 shrink-0 cursor-pointer place-items-center rounded-md text-inkfaint transition-colors",
+                hasChildren ? "hover:bg-card2 hover:text-ink" : "pointer-events-none",
+              )}
+              style={{ marginLeft: depth * 14 }}
+            >
+              {hasChildren ? (
+                <ChevronRightIcon
+                  className={cn(
+                    "size-3.5 transition-transform duration-200",
+                    !collapsed && "rotate-90",
+                  )}
+                />
+              ) : null}
+            </button>
             <NavLink
               to={`/list/${list.id}`}
               onClick={onNavigate}
@@ -192,7 +243,7 @@ export function Sidebar({
                     : "text-inkdim hover:bg-card/60 hover:text-ink",
                 )
               }
-              style={{ paddingLeft: 10 + depth * 16 }}
+              style={{ paddingLeft: 2 }}
             >
               <span
                 className="grid size-5 shrink-0 place-items-center rounded-lg text-card3"
@@ -207,7 +258,7 @@ export function Sidebar({
               <span className="truncate">{list.name}</span>
               {counts && (counts.open > 0 || counts.completed > 0) ? (
                 <span
-                  title={`${counts.open} open · ${counts.completed} completed`}
+                  title={`${counts.open} open · ${counts.completed} completed · ${pct}% done`}
                   className="shrink-0 rounded-md bg-card2 px-1.5 py-0.5 font-mono text-[10.5px] tabnum"
                 >
                   <span className={counts.open > 0 ? "text-ink" : "text-inkfaint"}>
@@ -233,6 +284,18 @@ export function Sidebar({
               width="w-44"
             >
               <div className="space-y-0.5">
+                {hasChildren ? (
+                  <MenuButton
+                    icon={
+                      <ChevronRightIcon
+                        className={cn("size-3.5 transition-transform", collapsed && "rotate-90")}
+                      />
+                    }
+                    onClick={() => toggleCollapsed(list.id)}
+                  >
+                    {collapsed ? "Show sub-lists" : "Hide sub-lists"}
+                  </MenuButton>
+                ) : null}
                 <MenuButton
                   icon={<ListIcon className="size-3.5" />}
                   onClick={() => setListModal({ mode: "rename", list })}
@@ -271,7 +334,26 @@ export function Sidebar({
               </div>
             </Popover>
           </div>
-          {renderLists(list.id, depth + 1)}
+
+          {!collapsed && counts && total > 0 ? (
+            <div
+              className="flex items-center gap-1.5 py-1 pr-9"
+              style={{ marginLeft: 26 + depth * 14 }}
+            >
+              <div className="h-1 flex-1 overflow-hidden rounded-full bg-card2">
+                <div
+                  className="h-full rounded-full transition-all"
+                  style={{
+                    width: `${pct}%`,
+                    background: pct === 100 ? "var(--ok)" : "var(--accent)",
+                  }}
+                />
+              </div>
+              <span className="shrink-0 font-mono text-[9.5px] tabnum text-inkfaint">{pct}%</span>
+            </div>
+          ) : null}
+
+          {!collapsed ? renderLists(list.id, depth + 1) : null}
         </div>
       );
     });

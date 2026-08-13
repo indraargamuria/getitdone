@@ -180,7 +180,7 @@ export function TaskDetail({
         </header>
 
         <div className="flex-1 space-y-6 overflow-y-auto px-5 py-5">
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-4">
             <Section label="Due">
               <DateField
                 value={due}
@@ -211,7 +211,7 @@ export function TaskDetail({
             />
           </Section>
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-4">
             <Section label="List">
               <ListPicker
                 value={listId}

@@ -1,8 +1,15 @@
-import { daysFromToday, humanDateLabel, humanDueLabel, humanTime } from "@getitdone/shared";
+import {
+  daysFromToday,
+  humanDateLabel,
+  humanDueLabel,
+  humanTime,
+  type Subtask,
+  subtaskProgress,
+} from "@getitdone/shared";
 import { memo } from "react";
 import type { TaskWithRelations } from "../lib/api";
 import { cn } from "../lib/cn";
-import { CheckIcon, FlagIcon, GripIcon, RepeatIcon } from "./icons";
+import { CheckIcon, GripIcon, RepeatIcon } from "./icons";
 import { Checkbox } from "./ui";
 
 function DueChip({ task }: { task: TaskWithRelations }) {
@@ -25,17 +32,78 @@ function DueChip({ task }: { task: TaskWithRelations }) {
   );
 }
 
+function PriorityBadge({ priority }: { priority: number }) {
+  if (priority >= 4) return null;
+  const marks = 4 - priority; // P1 → !!!, P2 → !!, P3 → !
+  return (
+    <span
+      className="mt-0.5 inline-flex shrink-0 items-center rounded-md border px-1 py-px text-[10px] font-bold leading-none tabnum"
+      style={{
+        color: `var(--p${priority})`,
+        borderColor: `color-mix(in srgb, var(--p${priority}) 40%, transparent)`,
+      }}
+      title={`Priority P${priority}`}
+    >
+      {"!".repeat(marks)}
+    </span>
+  );
+}
+
+function SubtaskRow({ sub, onToggle }: { sub: Subtask; onToggle: () => void }) {
+  const done = !!sub.completedAt;
+  return (
+    <div className="flex items-center gap-2 rounded-md px-1 py-0.5 transition-colors hover:bg-card2/60">
+      <button
+        type="button"
+        role="checkbox"
+        aria-checked={done}
+        aria-label={`Mark subtask "${sub.title}" ${done ? "not done" : "done"}`}
+        onClick={(e) => {
+          e.stopPropagation();
+          onToggle();
+        }}
+        className={cn(
+          "grid size-4 shrink-0 cursor-pointer place-items-center rounded-[5px] border transition-colors",
+          done ? "border-transparent" : "border-rulestrong bg-card hover:border-accent",
+        )}
+        style={done ? { background: "var(--ok)" } : undefined}
+      >
+        <svg viewBox="0 0 24 24" className="size-2.5 text-card3">
+          <path
+            d="m5 12.5 4.5 4.5L19 7"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={4}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </button>
+      <span
+        className={cn(
+          "min-w-0 flex-1 truncate text-[13px] leading-snug text-inkdim transition-colors",
+          done && "text-inkfaint line-through",
+        )}
+      >
+        {sub.title}
+      </span>
+    </div>
+  );
+}
+
 export const TaskItem = memo(function TaskItem({
   task,
   active,
   onSelect,
   onToggleComplete,
+  onToggleSubtask,
   dragProps,
 }: {
   task: TaskWithRelations;
   active: boolean;
   onSelect: () => void;
   onToggleComplete: () => void;
+  onToggleSubtask?: (subtaskId: string, completed: boolean) => void;
   dragProps?: {
     draggable: boolean;
     onDragStart: (e: React.DragEvent) => void;
@@ -46,7 +114,9 @@ export const TaskItem = memo(function TaskItem({
     isDragging: boolean;
   };
 }) {
-  const done = !!task.completedAt;
+  const { done: subDone, total: subTotal } = subtaskProgress(task.subtasks);
+  const hasSubtasks = task.subtasks.length > 0;
+  const done = hasSubtasks ? subDone === subTotal : !!task.completedAt;
   const priority = task.priority < 4 ? task.priority : null;
 
   return (
@@ -77,13 +147,7 @@ export const TaskItem = memo(function TaskItem({
 
       <div className="min-w-0 flex-1">
         <div className="flex items-start gap-1.5">
-          {priority ? (
-            <FlagIcon
-              className="mt-0.5 size-3.5 shrink-0"
-              strokeWidth={2.2}
-              style={{ color: `var(--p${priority})` }}
-            />
-          ) : null}
+          {priority ? <PriorityBadge priority={task.priority} /> : null}
           <p
             className={cn(
               "break-words text-[15px] leading-snug text-ink transition-colors",
@@ -94,8 +158,39 @@ export const TaskItem = memo(function TaskItem({
           </p>
         </div>
 
+        {hasSubtasks ? (
+          <div className="mt-1.5 space-y-0.5">
+            {task.subtasks.map((sub) => (
+              <SubtaskRow
+                key={sub.id}
+                sub={sub}
+                onToggle={() => onToggleSubtask?.(sub.id, !sub.completedAt)}
+              />
+            ))}
+          </div>
+        ) : null}
+
         <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 pl-0">
           <DueChip task={task} />
+          {hasSubtasks && !task.completedAt ? (
+            <span
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-md bg-card2 px-1.5 py-0.5 text-[11px] tabnum",
+                subDone === subTotal ? "text-ok" : "text-inkdim",
+              )}
+            >
+              <span className="h-1 w-8 overflow-hidden rounded-full bg-card3">
+                <span
+                  className={cn("block h-full rounded-full", subDone === subTotal && "bg-ok")}
+                  style={{
+                    width: `${Math.round((subDone / subTotal) * 100)}%`,
+                    background: subDone === subTotal ? undefined : "var(--accent)",
+                  }}
+                />
+              </span>
+              {subDone}/{subTotal}
+            </span>
+          ) : null}
           {task.completedAt ? (
             <span className="inline-flex items-center gap-1 rounded-md bg-ok/10 px-1.5 py-0.5 text-[11px] font-medium text-ok">
               <CheckIcon className="size-3" strokeWidth={2.4} />
@@ -104,16 +199,6 @@ export const TaskItem = memo(function TaskItem({
           ) : null}
           {task.recurrence ? (
             <RepeatIcon className="size-3 text-inkfaint" aria-label="Repeats" />
-          ) : null}
-          {task.subtasks.length > 0 ? (
-            <span
-              className={cn(
-                "text-[11px] tabnum",
-                task.subtasks.every((s) => s.completedAt) && !done ? "text-ok" : "text-inkfaint",
-              )}
-            >
-              {task.subtasks.filter((s) => s.completedAt).length}/{task.subtasks.length}
-            </span>
           ) : null}
           {task.tags.map((tag) => (
             <span

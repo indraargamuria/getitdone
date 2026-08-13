@@ -28,6 +28,11 @@ interface ViewConfig {
   smart?: "today" | "week" | "inbox" | "all" | "completed";
 }
 
+function isEffectivelyOpen(task: TaskWithRelations): boolean {
+  if (task.subtasks.length > 0) return !task.subtasks.every((s) => s.completedAt);
+  return !task.completedAt;
+}
+
 function useViewConfig(): ViewConfig {
   const { pathname } = useLocation();
   const { id } = useParams();
@@ -195,7 +200,15 @@ export default function ViewPage() {
         return {
           ...old,
           tasks: old.tasks.map((t) =>
-            t.id === taskId ? { ...t, completedAt: completed ? now : null } : t,
+            t.id === taskId
+              ? {
+                  ...t,
+                  completedAt: completed ? now : null,
+                  subtasks: completed
+                    ? t.subtasks.map((s) => ({ ...s, completedAt: now }))
+                    : t.subtasks.map((s) => ({ ...s, completedAt: null })),
+                }
+              : t,
           ),
         };
       });
@@ -211,6 +224,37 @@ export default function ViewPage() {
       if (res.next?.dueDate) {
         toast("success", "Completed — next up scheduled");
       }
+    },
+  });
+
+  const completeSubtaskMut = useMutation({
+    mutationFn: ({ subtaskId, completed }: { subtaskId: string; completed: boolean }) =>
+      tasksApi.completeSubtask(subtaskId, completed),
+    onMutate: async ({ subtaskId, completed }) => {
+      await queryClient.cancelQueries({ queryKey: ["tasks"] });
+      const prev = queryClient.getQueryData(tasksKey);
+      queryClient.setQueryData(tasksKey, (old?: { tasks: TaskWithRelations[] }) => {
+        if (!old) return old;
+        const now = new Date().toISOString();
+        return {
+          ...old,
+          tasks: old.tasks.map((t) => ({
+            ...t,
+            subtasks: t.subtasks.map((s) =>
+              s.id === subtaskId ? { ...s, completedAt: completed ? now : null } : s,
+            ),
+          })),
+        };
+      });
+      return { prev };
+    },
+    onError: (e, _vars, ctx) => {
+      if (ctx?.prev) queryClient.setQueryData(tasksKey, ctx.prev);
+      toast("error", "Couldn't update subtask", (e as Error).message);
+    },
+    onSuccess: () => {
+      invalidateTasks();
+      invalidateBootstrap();
     },
   });
 
@@ -231,7 +275,13 @@ export default function ViewPage() {
 
   const tasks = tasksQuery.data?.tasks ?? [];
   const loading = tasksQuery.isPending;
-  const count = cfg.kind === "search" ? tasks.length : tasks.filter((t) => !t.completedAt).length;
+  const count = cfg.kind === "search" ? tasks.length : tasks.filter(isEffectivelyOpen).length;
+
+  const listSummary =
+    cfg.kind === "list" && id ? (bootstrap.data?.listCounts[id] ?? undefined) : undefined;
+  const listPct = listSummary
+    ? Math.round((listSummary.completed / (listSummary.open + listSummary.completed)) * 100)
+    : 0;
 
   const quickAddListId = cfg.kind === "list" ? id : null;
   const quickAddTagIds = cfg.kind === "tag" ? [id!] : undefined;
@@ -250,6 +300,22 @@ export default function ViewPage() {
             <p className="mb-1 hidden font-mono text-[11px] uppercase tracking-[0.18em] text-inkfaint tabnum sm:block">
               {count} open
             </p>
+          ) : null}
+          {cfg.kind === "list" && listSummary && listSummary.open + listSummary.completed > 0 ? (
+            <div className="mb-1 shrink-0 text-right">
+              <p className="font-mono text-[11px] tabnum text-inkfaint">
+                {listSummary.open} open · {listPct}% done
+              </p>
+              <div className="mt-1 h-1 w-24 overflow-hidden rounded-full bg-card2">
+                <div
+                  className="h-full rounded-full transition-all"
+                  style={{
+                    width: `${listPct}%`,
+                    background: listPct === 100 ? "var(--ok)" : "var(--accent)",
+                  }}
+                />
+              </div>
+            </div>
           ) : null}
           {cfg.kind === "list" ? (
             <div className="mb-1 shrink-0">
@@ -287,8 +353,11 @@ export default function ViewPage() {
             onSelect={openTask}
             onToggleComplete={(taskId) => {
               const task = tasks.find((t) => t.id === taskId);
-              completeMut.mutate({ taskId, completed: !task?.completedAt });
+              completeMut.mutate({ taskId, completed: task ? !isEffectivelyOpen(task) : false });
             }}
+            onToggleSubtask={(subtaskId, completed) =>
+              completeSubtaskMut.mutate({ subtaskId, completed })
+            }
             onReorder={handleReorder}
             sortable={cfg.kind !== "search" && cfg.smart !== "completed"}
           />

@@ -13,21 +13,7 @@ import {
   type TaskCreateInput,
   type TaskInput,
 } from "@getitdone/shared";
-import type { SQL } from "drizzle-orm";
-import {
-  and,
-  asc,
-  desc,
-  eq,
-  gte,
-  inArray,
-  isNotNull,
-  isNull,
-  like,
-  lt,
-  or,
-  sql,
-} from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, like, lt, or, sql } from "drizzle-orm";
 import { type DrizzleD1Database, drizzle } from "drizzle-orm/d1";
 import { lists, sessions, subtasks, tags, tasks, taskTags, users } from "./schema";
 
@@ -582,6 +568,13 @@ export async function setTaskCompleted(
     .returning()
     .get();
 
+  // Completion derives from the lowest level: toggling a parent reflects onto
+  // its subtasks, keeping effective state consistent.
+  await db
+    .update(subtasks)
+    .set({ completedAt: completed ? now : null })
+    .where(eq(subtasks.taskId, id));
+
   const result: { task: TaskWithRelations; next?: TaskWithRelations } = {
     task: (await getTask(db, userId, updated!.id))!,
   };
@@ -627,14 +620,15 @@ export async function listCountsByList(
   }
 
   const taskRows = await db
-    .select({ listId: tasks.listId, completedAt: tasks.completedAt })
+    .select({ id: tasks.id, listId: tasks.listId, completedAt: tasks.completedAt })
     .from(tasks)
     .where(eq(tasks.userId, userId));
+  const subState = await subtaskStateByTask(db, userId);
   const direct = new Map<string, ListCounts>();
   for (const t of taskRows) {
     if (!t.listId) continue;
     const c = direct.get(t.listId) ?? { open: 0, completed: 0 };
-    if (t.completedAt) c.completed += 1;
+    if (isEffectiveDone(t, subState)) c.completed += 1;
     else c.open += 1;
     direct.set(t.listId, c);
   }
@@ -665,16 +659,17 @@ export async function reorderTasks(db: DB, userId: string, orderedIds: string[])
 }
 
 export async function reportSummary(db: DB, userId: string) {
-  const [listRows, taskRows] = await Promise.all([
+  const [listRows, taskRows, subState] = await Promise.all([
     db
       .select()
       .from(lists)
       .where(eq(lists.userId, userId))
       .orderBy(asc(lists.sortOrder), asc(lists.name)),
     db
-      .select({ listId: tasks.listId, completedAt: tasks.completedAt })
+      .select({ id: tasks.id, listId: tasks.listId, completedAt: tasks.completedAt })
       .from(tasks)
       .where(eq(tasks.userId, userId)),
+    subtaskStateByTask(db, userId),
   ]);
 
   let total = 0;
@@ -684,22 +679,55 @@ export async function reportSummary(db: DB, userId: string) {
   const perList = new Map<string, { open: number; completed: number }>();
   for (const t of taskRows) {
     total += 1;
-    if (t.completedAt) completed += 1;
+    if (isEffectiveDone(t, subState)) completed += 1;
     else {
       open += 1;
       if (!t.listId) inbox += 1;
     }
     if (t.listId) {
       const c = perList.get(t.listId) ?? { open: 0, completed: 0 };
-      if (t.completedAt) c.completed += 1;
+      if (isEffectiveDone(t, subState)) c.completed += 1;
       else c.open += 1;
       perList.set(t.listId, c);
     }
   }
 
+  // A parent list is a summary of itself + its sub-lists, so roll counts up.
+  const childrenOf = new Map<string, string[]>();
+  for (const l of listRows) {
+    if (!l.parentId) continue;
+    const arr = childrenOf.get(l.parentId) ?? [];
+    arr.push(l.id);
+    childrenOf.set(l.parentId, arr);
+  }
+  const withDescendants = new Map<string, string[]>();
+  for (const l of listRows) {
+    const out: string[] = [];
+    const stack = [l.id];
+    while (stack.length > 0) {
+      const cur = stack.pop()!;
+      out.push(cur);
+      for (const child of childrenOf.get(cur) ?? []) stack.push(child);
+    }
+    withDescendants.set(l.id, out);
+  }
+
   const byList = listRows.map((l) => {
-    const c = perList.get(l.id) ?? { open: 0, completed: 0 };
-    return { list: toList(l), open: c.open, completed: c.completed, total: c.open + c.completed };
+    let openFor = 0;
+    let completedFor = 0;
+    for (const id of withDescendants.get(l.id) ?? []) {
+      const c = perList.get(id);
+      if (c) {
+        openFor += c.open;
+        completedFor += c.completed;
+      }
+    }
+    return {
+      list: toList(l),
+      open: openFor,
+      completed: completedFor,
+      total: openFor + completedFor,
+    };
   });
 
   return { totals: { total, open, completed, inbox }, byList };
@@ -738,6 +766,40 @@ export async function removeTaskTag(
 }
 
 /* --------------------------------- subtasks --------------------------------- */
+
+/**
+ * Which tasks have subtasks, and how many of each task's subtasks are still
+ * open. Used to derive effective completion from the lowest level.
+ */
+async function subtaskStateByTask(
+  db: DB,
+  userId: string,
+): Promise<{ withSubtasks: Set<string>; incomplete: Map<string, number> }> {
+  const rows = await db
+    .select({ taskId: subtasks.taskId, completedAt: subtasks.completedAt })
+    .from(subtasks)
+    .innerJoin(tasks, eq(subtasks.taskId, tasks.id))
+    .where(eq(tasks.userId, userId));
+  const withSubtasks = new Set<string>();
+  const incomplete = new Map<string, number>();
+  for (const r of rows) {
+    withSubtasks.add(r.taskId);
+    if (!r.completedAt) incomplete.set(r.taskId, (incomplete.get(r.taskId) ?? 0) + 1);
+  }
+  return { withSubtasks, incomplete };
+}
+
+/**
+ * Effective completion for counting purposes: a task with subtasks is done
+ * only when every subtask is done; otherwise its own `completedAt` is used.
+ */
+function isEffectiveDone(
+  task: { id: string; completedAt: string | null },
+  state: { withSubtasks: Set<string>; incomplete: Map<string, number> },
+): boolean {
+  if (state.withSubtasks.has(task.id)) return (state.incomplete.get(task.id) ?? 0) === 0;
+  return !!task.completedAt;
+}
 
 export async function createSubtask(
   db: DB,
@@ -809,26 +871,33 @@ export async function listCounts(
   userId: string,
 ): Promise<{ today: number; week: number; inbox: number; all: number; completed: number }> {
   const today = startOfToday();
-  const count = async (cond?: SQL) => {
-    const row = await db
-      .select({ n: sql<number>`count(*)` })
+  const [taskRows, subState] = await Promise.all([
+    db
+      .select({
+        id: tasks.id,
+        listId: tasks.listId,
+        dueDate: tasks.dueDate,
+        completedAt: tasks.completedAt,
+      })
       .from(tasks)
-      .where(and(eq(tasks.userId, userId), ...(cond ? [cond] : [])))
-      .get();
-    return Number(row?.n ?? 0);
-  };
-  const [todayC, weekC, inboxC, allC, completedC] = await Promise.all([
-    count(eq(tasks.dueDate, today)),
-    count(
-      and(
-        gte(tasks.dueDate, today),
-        lt(tasks.dueDate, addDaysStr(today, 7)),
-        isNull(tasks.completedAt),
-      ),
-    ),
-    count(and(isNull(tasks.listId), isNull(tasks.completedAt))),
-    count(isNull(tasks.completedAt)),
-    count(isNotNull(tasks.completedAt)),
+      .where(eq(tasks.userId, userId)),
+    subtaskStateByTask(db, userId),
   ]);
+
+  let todayC = 0;
+  let weekC = 0;
+  let inboxC = 0;
+  let allC = 0;
+  let completedC = 0;
+  for (const t of taskRows) {
+    if (isEffectiveDone(t, subState)) {
+      completedC += 1;
+      continue;
+    }
+    allC += 1;
+    if (t.dueDate === today) todayC += 1;
+    if (t.dueDate && t.dueDate >= today && t.dueDate < addDaysStr(today, 7)) weekC += 1;
+    if (!t.listId) inboxC += 1;
+  }
   return { today: todayC, week: weekC, inbox: inboxC, all: allC, completed: completedC };
 }

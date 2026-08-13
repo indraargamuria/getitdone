@@ -1,11 +1,35 @@
-import { addDaysStr, startOfToday } from "@getitdone/shared";
+import {
+  addDaysStr,
+  humanDueLabel,
+  humanTime,
+  startOfToday,
+  TASK_TITLE_MAX,
+} from "@getitdone/shared";
 import { useMutation } from "@tanstack/react-query";
 import { useRef, useState } from "react";
-import { tasksApi } from "../lib/api";
+import { ApiError, tasksApi } from "../lib/api";
 import { cn } from "../lib/cn";
 import { invalidateAll } from "../lib/mutations";
+import { Popover } from "./fields";
 import { CalendarIcon, PlusIcon, XIcon } from "./icons";
 import { useToast } from "./ui";
+
+const inputCls =
+  "w-full cursor-pointer rounded-lg border border-rule bg-card px-3 py-2 text-sm text-ink outline-none transition-colors focus:border-accent";
+
+function friendlyCreateError(e: unknown): string {
+  if (e instanceof ApiError && Array.isArray(e.issues)) {
+    const issue = e.issues.find((i) => (i as { path?: unknown[] }).path?.[0] === "title") as
+      | { code?: string; message?: string }
+      | undefined;
+    if (issue) {
+      if (issue.code === "too_big") return "Title is too long — max 500 characters.";
+      if (issue.code === "too_small") return "Title can't be empty.";
+      if (issue.message) return issue.message;
+    }
+  }
+  return e instanceof Error ? e.message : "Unknown error";
+}
 
 export function QuickAdd({
   listId,
@@ -43,8 +67,12 @@ export function QuickAdd({
       invalidateAll();
       inputRef.current?.focus();
     },
-    onError: (e) => toast("error", "Couldn't add task", (e as Error).message),
+    onError: (e) => toast("error", "Couldn't add task", friendlyCreateError(e)),
   });
+
+  const dateLabel = date
+    ? `${date === today ? "Today" : date === addDaysStr(today, 1) ? "Tmrw" : humanDueLabel(date)}${time ? ` · ${humanTime(time)}` : ""}`
+    : "";
 
   return (
     <div
@@ -58,6 +86,7 @@ export function QuickAdd({
         ref={inputRef}
         value={title}
         onChange={(e) => setTitle(e.target.value)}
+        maxLength={TASK_TITLE_MAX}
         autoFocus={autoFocus}
         onKeyDown={(e) => {
           if (e.key === "Enter" && title.trim()) {
@@ -76,24 +105,69 @@ export function QuickAdd({
               setDate(null);
               setTime(null);
             }}
+            title="Clear due date"
             className="flex items-center gap-1 rounded-lg bg-accentsoft px-2 py-1 text-xs font-medium text-accentstrong dark:text-accent"
           >
-            {date === today ? "Today" : date === addDaysStr(today, 1) ? "Tmrw" : date.slice(5)}
+            {dateLabel}
             <XIcon className="size-3" />
           </button>
         ) : null}
-        <label
-          className="grid size-8 cursor-pointer place-items-center rounded-lg text-inkdim transition-colors hover:bg-card2 hover:text-ink"
-          title="Add due date"
+        <Popover
+          trigger={(open) => (
+            <button
+              type="button"
+              aria-label="Add due date"
+              title="Add due date"
+              className={cn(
+                "grid size-8 cursor-pointer place-items-center rounded-lg text-inkdim transition-colors hover:bg-card2 hover:text-ink",
+                open && "bg-card2 text-ink",
+              )}
+            >
+              <CalendarIcon className="size-4" />
+            </button>
+          )}
         >
-          <CalendarIcon className="size-4" />
-          <input
-            type="date"
-            className="sr-only"
-            value={date ?? ""}
-            onChange={(e) => setDate(e.target.value || null)}
-          />
-        </label>
+          <div className="space-y-2">
+            <div className="grid grid-cols-3 gap-1.5">
+              {[
+                { label: "Today", d: today },
+                { label: "Tomorrow", d: addDaysStr(today, 1) },
+                { label: "+7 days", d: addDaysStr(today, 7) },
+              ].map((preset) => (
+                <button
+                  key={preset.label}
+                  type="button"
+                  onClick={() => setDate(preset.d)}
+                  className={cn(
+                    "cursor-pointer rounded-lg border px-2 py-1.5 text-xs font-medium transition-colors",
+                    date === preset.d
+                      ? "border-accent bg-accentsoft text-accentstrong dark:text-accent"
+                      : "border-rule bg-card text-inkdim hover:text-ink",
+                  )}
+                >
+                  {preset.label}
+                </button>
+              ))}
+            </div>
+            <div className="grid grid-cols-2 gap-1.5">
+              <input
+                type="date"
+                value={date ?? ""}
+                onChange={(e) => setDate(e.target.value || null)}
+                className={inputCls}
+                aria-label="Due date"
+              />
+              <input
+                type="time"
+                value={time ?? ""}
+                disabled={!date}
+                onChange={(e) => setTime(e.target.value || null)}
+                className={cn(inputCls, "disabled:opacity-40")}
+                aria-label="Due time"
+              />
+            </div>
+          </div>
+        </Popover>
       </div>
     </div>
   );
