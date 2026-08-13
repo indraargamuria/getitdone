@@ -543,7 +543,7 @@ describe("subtask-aware completion", () => {
     expect(status).toBe(400);
   });
 
-  it("counts a parent task as open until all subtasks are done", async () => {
+  it("counts a parent task by its subtasks", async () => {
     const list = await json(
       await request("/api/lists", { method: "POST", body: { name: "Sub Aware" }, cookie: sessionCookie }),
     );
@@ -560,7 +560,7 @@ describe("subtask-aware completion", () => {
     const [sub1, sub2] = created.body.task?.subtasks ?? [];
 
     let boot = (await json(await request("/api/bootstrap", { cookie: sessionCookie }))).body;
-    expect(boot.listCounts[listId]).toEqual({ open: 1, completed: 0 });
+    expect(boot.listCounts[listId]).toEqual({ open: 2, completed: 0 });
 
     await request(`/api/tasks/subtasks/${sub1?.id}/complete`, {
       method: "POST",
@@ -568,7 +568,7 @@ describe("subtask-aware completion", () => {
       cookie: sessionCookie,
     });
     boot = (await json(await request("/api/bootstrap", { cookie: sessionCookie }))).body;
-    expect(boot.listCounts[listId]).toEqual({ open: 1, completed: 0 });
+    expect(boot.listCounts[listId]).toEqual({ open: 1, completed: 1 });
 
     await request(`/api/tasks/subtasks/${sub2?.id}/complete`, {
       method: "POST",
@@ -576,7 +576,7 @@ describe("subtask-aware completion", () => {
       cookie: sessionCookie,
     });
     boot = (await json(await request("/api/bootstrap", { cookie: sessionCookie }))).body;
-    expect(boot.listCounts[listId]).toEqual({ open: 0, completed: 1 });
+    expect(boot.listCounts[listId]).toEqual({ open: 0, completed: 2 });
     expect(taskId).toBeTruthy();
   });
 

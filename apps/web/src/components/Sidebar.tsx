@@ -205,8 +205,6 @@ export function Sidebar({
       const hasChildren = (childrenOf.get(list.id) ?? []).length > 0;
       const collapsed = hasChildren && collapsedIds.has(list.id);
       const counts = data.listCounts[list.id];
-      const total = counts ? counts.open + counts.completed : 0;
-      const pct = counts && total > 0 ? Math.round((counts.completed / total) * 100) : 0;
       return (
         <div key={list.id}>
           <div className="group relative flex items-center">
@@ -258,7 +256,7 @@ export function Sidebar({
               <span className="truncate">{list.name}</span>
               {counts && (counts.open > 0 || counts.completed > 0) ? (
                 <span
-                  title={`${counts.open} open · ${counts.completed} completed · ${pct}% done`}
+                  title={`${counts.open} open · ${counts.completed} completed`}
                   className="shrink-0 rounded-md bg-card2 px-1.5 py-0.5 font-mono text-[10.5px] tabnum"
                 >
                   <span className={counts.open > 0 ? "text-ink" : "text-inkfaint"}>
@@ -334,24 +332,6 @@ export function Sidebar({
               </div>
             </Popover>
           </div>
-
-          {!collapsed && counts && total > 0 ? (
-            <div
-              className="flex items-center gap-1.5 py-1 pr-9"
-              style={{ marginLeft: 26 + depth * 14 }}
-            >
-              <div className="h-1 flex-1 overflow-hidden rounded-full bg-card2">
-                <div
-                  className="h-full rounded-full transition-all"
-                  style={{
-                    width: `${pct}%`,
-                    background: pct === 100 ? "var(--ok)" : "var(--accent)",
-                  }}
-                />
-              </div>
-              <span className="shrink-0 font-mono text-[9.5px] tabnum text-inkfaint">{pct}%</span>
-            </div>
-          ) : null}
 
           {!collapsed ? renderLists(list.id, depth + 1) : null}
         </div>

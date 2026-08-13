@@ -275,7 +275,13 @@ export default function ViewPage() {
 
   const tasks = tasksQuery.data?.tasks ?? [];
   const loading = tasksQuery.isPending;
-  const count = cfg.kind === "search" ? tasks.length : tasks.filter(isEffectivelyOpen).length;
+  const openUnits = (t: TaskWithRelations) =>
+    t.subtasks.length > 0
+      ? t.subtasks.filter((s) => !s.completedAt).length
+      : isEffectivelyOpen(t)
+        ? 1
+        : 0;
+  const count = cfg.kind === "search" ? tasks.length : tasks.reduce((n, t) => n + openUnits(t), 0);
 
   const listSummary =
     cfg.kind === "list" && id ? (bootstrap.data?.listCounts[id] ?? undefined) : undefined;

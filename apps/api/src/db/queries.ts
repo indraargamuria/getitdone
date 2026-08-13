@@ -627,9 +627,10 @@ export async function listCountsByList(
   const direct = new Map<string, ListCounts>();
   for (const t of taskRows) {
     if (!t.listId) continue;
+    const units = progressUnits(t, subState);
     const c = direct.get(t.listId) ?? { open: 0, completed: 0 };
-    if (isEffectiveDone(t, subState)) c.completed += 1;
-    else c.open += 1;
+    c.open += units.open;
+    c.completed += units.completed;
     direct.set(t.listId, c);
   }
 
@@ -678,16 +679,15 @@ export async function reportSummary(db: DB, userId: string) {
   let inbox = 0;
   const perList = new Map<string, { open: number; completed: number }>();
   for (const t of taskRows) {
-    total += 1;
-    if (isEffectiveDone(t, subState)) completed += 1;
-    else {
-      open += 1;
-      if (!t.listId) inbox += 1;
-    }
+    const units = progressUnits(t, subState);
+    total += units.open + units.completed;
+    open += units.open;
+    completed += units.completed;
+    if (!t.listId) inbox += units.open;
     if (t.listId) {
       const c = perList.get(t.listId) ?? { open: 0, completed: 0 };
-      if (isEffectiveDone(t, subState)) c.completed += 1;
-      else c.open += 1;
+      c.open += units.open;
+      c.completed += units.completed;
       perList.set(t.listId, c);
     }
   }
@@ -768,37 +768,40 @@ export async function removeTaskTag(
 /* --------------------------------- subtasks --------------------------------- */
 
 /**
- * Which tasks have subtasks, and how many of each task's subtasks are still
- * open. Used to derive effective completion from the lowest level.
+ * Subtask completion state per task: how many subtasks it has and how many are
+ * done. A task with no subtasks has no entry here.
  */
 async function subtaskStateByTask(
   db: DB,
   userId: string,
-): Promise<{ withSubtasks: Set<string>; incomplete: Map<string, number> }> {
+): Promise<Map<string, { total: number; done: number }>> {
   const rows = await db
     .select({ taskId: subtasks.taskId, completedAt: subtasks.completedAt })
     .from(subtasks)
     .innerJoin(tasks, eq(subtasks.taskId, tasks.id))
     .where(eq(tasks.userId, userId));
-  const withSubtasks = new Set<string>();
-  const incomplete = new Map<string, number>();
+  const state = new Map<string, { total: number; done: number }>();
   for (const r of rows) {
-    withSubtasks.add(r.taskId);
-    if (!r.completedAt) incomplete.set(r.taskId, (incomplete.get(r.taskId) ?? 0) + 1);
+    const cur = state.get(r.taskId) ?? { total: 0, done: 0 };
+    cur.total += 1;
+    if (r.completedAt) cur.done += 1;
+    state.set(r.taskId, cur);
   }
-  return { withSubtasks, incomplete };
+  return state;
 }
 
 /**
- * Effective completion for counting purposes: a task with subtasks is done
- * only when every subtask is done; otherwise its own `completedAt` is used.
+ * Open/completed units for a task: a task with subtasks is worth one unit per
+ * subtask (completion derived from each subtask); a task without subtasks is
+ * worth one unit.
  */
-function isEffectiveDone(
+function progressUnits(
   task: { id: string; completedAt: string | null },
-  state: { withSubtasks: Set<string>; incomplete: Map<string, number> },
-): boolean {
-  if (state.withSubtasks.has(task.id)) return (state.incomplete.get(task.id) ?? 0) === 0;
-  return !!task.completedAt;
+  state: Map<string, { total: number; done: number }>,
+): { open: number; completed: number } {
+  const sub = state.get(task.id);
+  if (sub) return { open: sub.total - sub.done, completed: sub.done };
+  return task.completedAt ? { open: 0, completed: 1 } : { open: 1, completed: 0 };
 }
 
 export async function createSubtask(
@@ -890,14 +893,12 @@ export async function listCounts(
   let allC = 0;
   let completedC = 0;
   for (const t of taskRows) {
-    if (isEffectiveDone(t, subState)) {
-      completedC += 1;
-      continue;
-    }
-    allC += 1;
-    if (t.dueDate === today) todayC += 1;
-    if (t.dueDate && t.dueDate >= today && t.dueDate < addDaysStr(today, 7)) weekC += 1;
-    if (!t.listId) inboxC += 1;
+    const units = progressUnits(t, subState);
+    allC += units.open;
+    completedC += units.completed;
+    if (t.dueDate === today) todayC += units.open;
+    if (t.dueDate && t.dueDate >= today && t.dueDate < addDaysStr(today, 7)) weekC += units.open;
+    if (!t.listId) inboxC += units.open;
   }
   return { today: todayC, week: weekC, inbox: inboxC, all: allC, completed: completedC };
 }
