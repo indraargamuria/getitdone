@@ -11,4 +11,5 @@ export function invalidateBootstrap() {
 export function invalidateAll() {
   invalidateTasks();
   invalidateBootstrap();
+  void queryClient.invalidateQueries({ queryKey: ["task"] });
 }

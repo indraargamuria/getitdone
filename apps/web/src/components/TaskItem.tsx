@@ -10,6 +10,7 @@ import { memo } from "react";
 import type { TaskWithRelations } from "../lib/api";
 import { cn } from "../lib/cn";
 import { CheckIcon, GripIcon, RepeatIcon } from "./icons";
+import { PriorityBadge } from "./PriorityBadge";
 import { Checkbox } from "./ui";
 
 function DueChip({ task }: { task: TaskWithRelations }) {
@@ -28,23 +29,6 @@ function DueChip({ task }: { task: TaskWithRelations }) {
     >
       {humanDueLabel(task.dueDate)}
       {task.dueTime ? <span className="opacity-80">· {humanTime(task.dueTime)}</span> : null}
-    </span>
-  );
-}
-
-function PriorityBadge({ priority }: { priority: number }) {
-  if (priority >= 4) return null;
-  const marks = 4 - priority; // P1 → !!!, P2 → !!, P3 → !
-  return (
-    <span
-      className="mt-0.5 inline-flex shrink-0 items-center rounded-md border px-1 py-px text-[10px] font-bold leading-none tabnum"
-      style={{
-        color: `var(--p${priority})`,
-        borderColor: `color-mix(in srgb, var(--p${priority}) 40%, transparent)`,
-      }}
-      title={`Priority P${priority}`}
-    >
-      {"!".repeat(marks)}
     </span>
   );
 }
@@ -147,7 +131,7 @@ export const TaskItem = memo(function TaskItem({
 
       <div className="min-w-0 flex-1">
         <div className="flex items-start gap-1.5">
-          {priority ? <PriorityBadge priority={task.priority} /> : null}
+          {priority ? <PriorityBadge priority={task.priority} className="mt-0.5" /> : null}
           <p
             className={cn(
               "break-words text-[15px] leading-snug text-ink transition-colors",

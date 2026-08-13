@@ -1,3 +1,4 @@
+import { effectiveTaskDone } from "@getitdone/shared";
 import { useRef, useState } from "react";
 import type { TaskWithRelations } from "../lib/api";
 import { TaskItem } from "./TaskItem";
@@ -23,8 +24,8 @@ export function TaskList({
   const [over, setOver] = useState<{ id: string; pos: "above" | "below" } | null>(null);
   const dragging = useRef(false);
 
-  const open = tasks.filter((t) => !t.completedAt);
-  const done = tasks.filter((t) => t.completedAt);
+  const open = tasks.filter((t) => !effectiveTaskDone(t));
+  const done = tasks.filter((t) => effectiveTaskDone(t));
   const canReorder = sortable && open.length > 1;
 
   function resetDrag() {

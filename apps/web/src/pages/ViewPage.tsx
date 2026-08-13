@@ -1,4 +1,4 @@
-import { formatMonthYear, startOfToday } from "@getitdone/shared";
+import { effectiveTaskDone, formatMonthYear, startOfToday } from "@getitdone/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { useLocation, useParams, useSearchParams } from "react-router";
@@ -359,7 +359,7 @@ export default function ViewPage() {
             onSelect={openTask}
             onToggleComplete={(taskId) => {
               const task = tasks.find((t) => t.id === taskId);
-              completeMut.mutate({ taskId, completed: task ? !isEffectivelyOpen(task) : false });
+              completeMut.mutate({ taskId, completed: task ? !effectiveTaskDone(task) : true });
             }}
             onToggleSubtask={(subtaskId, completed) =>
               completeSubtaskMut.mutate({ subtaskId, completed })

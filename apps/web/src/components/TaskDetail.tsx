@@ -1,6 +1,6 @@
 import { humanDueLabel, humanTime, type List, type Subtask, type Tag } from "@getitdone/shared";
 import { useMutation } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { listsApi, type TaskWithRelations, tagsApi, tasksApi } from "../lib/api";
 import { cn } from "../lib/cn";
 import { invalidateAll } from "../lib/mutations";
@@ -13,6 +13,7 @@ import {
   TagPicker,
 } from "./fields";
 import { CalendarIcon, NoteIcon, PlusIcon, RepeatIcon, TrashIcon, XIcon } from "./icons";
+import { PriorityBadge } from "./PriorityBadge";
 import { Checkbox, useToast } from "./ui";
 
 function Section({ label, children }: { label: string; children: React.ReactNode }) {
@@ -42,6 +43,8 @@ export function TaskDetail({
   const { toast } = useToast();
   const [title, setTitle] = useState(task.title);
   const [notes, setNotes] = useState(task.notes ?? "");
+  const notesRef = useRef(notes);
+  const notesTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [due, setDue] = useState<DateTimeValue>({ date: task.dueDate, time: task.dueTime });
   const [priority, setPriority] = useState<number>(task.priority);
   const [listId, setListId] = useState<string | null>(task.listId);
@@ -66,10 +69,31 @@ export function TaskDetail({
     patch.mutate(p);
   }
 
+  function saveNotes(value: string) {
+    if (value !== (task.notes ?? "")) save({ notes: value || null });
+  }
+
+  function flushNotes() {
+    if (notesTimer.current) {
+      clearTimeout(notesTimer.current);
+      notesTimer.current = null;
+    }
+    saveNotes(notesRef.current);
+  }
+
+  useEffect(
+    () => () => {
+      if (notesTimer.current) clearTimeout(notesTimer.current);
+    },
+    [],
+  );
+
   const toggleComplete = useMutation({
     mutationFn: () => tasksApi.complete(task.id, !completed),
     onSuccess: (res) => {
+      flushNotes();
       refetch();
+      onClose();
       if (res.next?.dueDate) {
         toast(
           "success",
@@ -202,13 +226,16 @@ export function TaskDetail({
           </div>
 
           <Section label="Priority">
-            <PriorityPicker
-              value={priority}
-              onChange={(p) => {
-                setPriority(p);
-                save({ priority: p as 1 | 2 | 3 | 4 });
-              }}
-            />
+            <div className="flex items-center gap-2">
+              <PriorityBadge priority={priority} size="md" />
+              <PriorityPicker
+                value={priority}
+                onChange={(p) => {
+                  setPriority(p);
+                  save({ priority: p as 1 | 2 | 3 | 4 });
+                }}
+              />
+            </div>
           </Section>
 
           <div className="space-y-4">
@@ -249,8 +276,13 @@ export function TaskDetail({
               </div>
               <textarea
                 value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                onBlur={() => notes !== (task.notes ?? "") && save({ notes: notes || null })}
+                onChange={(e) => {
+                  setNotes(e.target.value);
+                  notesRef.current = e.target.value;
+                  if (notesTimer.current) clearTimeout(notesTimer.current);
+                  notesTimer.current = setTimeout(saveNotes, 600, e.target.value);
+                }}
+                onBlur={flushNotes}
                 rows={4}
                 placeholder="Details, links, context…"
                 className="w-full resize-none bg-transparent px-3 pb-3 text-sm leading-relaxed text-ink outline-none placeholder:text-inkfaint"
