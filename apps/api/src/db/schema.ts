@@ -72,6 +72,7 @@ export const tasks = sqliteTable(
     dueDate: text("due_date"),
     dueTime: text("due_time"),
     completedAt: text("completed_at"),
+    assignee: text("assignee"),
     recurrence: text("recurrence"),
     sortOrder: real("sort_order").notNull().default(0),
     createdAt: text("created_at").notNull(),

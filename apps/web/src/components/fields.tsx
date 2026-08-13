@@ -7,10 +7,18 @@ import {
   parseRecurrenceRule,
   startOfToday,
 } from "@getitdone/shared";
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { cn } from "../lib/cn";
 import { ListIconGlyph } from "../lib/listIcons";
-import { CalendarIcon, FlagIcon, RepeatIcon, TagIcon, XIcon } from "./icons";
+import { CalendarIcon, FlagIcon, RepeatIcon, TagIcon, UserIcon, XIcon } from "./icons";
 
 /* --------------------------------- popover --------------------------------- */
 
@@ -20,15 +28,66 @@ export function Popover({
   align = "end",
   width = "w-72",
   place = "bottom",
+  z = "z-40",
+  onOpenChange,
 }: {
   trigger: (open: boolean) => ReactNode;
   children: ReactNode;
   align?: "start" | "end";
   width?: string;
   place?: "top" | "bottom";
+  z?: string;
+  onOpenChange?: (open: boolean) => void;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ top?: number; bottom?: number; left: number } | null>(null);
+
+  const position = useCallback(() => {
+    const host = ref.current;
+    const panel = panelRef.current;
+    if (!host || !panel) return;
+    const hr = host.getBoundingClientRect();
+    const pr = panel.getBoundingClientRect();
+    const m = 8;
+    let below = place !== "top";
+    if (below && hr.bottom + pr.height + m > window.innerHeight && hr.top - pr.height - m >= 0) {
+      below = false;
+    } else if (
+      !below &&
+      hr.top - pr.height - m < 0 &&
+      hr.bottom + pr.height + m <= window.innerHeight
+    ) {
+      below = true;
+    }
+    let left = align === "end" ? hr.right - pr.width : hr.left;
+    left = Math.max(m, Math.min(left, window.innerWidth - pr.width - m));
+    const next: { top?: number; bottom?: number; left: number } = below
+      ? { top: hr.height + m, left: left - hr.left }
+      : { bottom: hr.height + m, left: left - hr.left };
+    setPos((prev) =>
+      prev && prev.left === next.left && prev.top === next.top && prev.bottom === next.bottom
+        ? prev
+        : next,
+    );
+  }, [place, align]);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    position();
+  }, [open, position]);
+
+  useEffect(() => {
+    if (!open) return;
+    const measure = () => position();
+    window.addEventListener("resize", measure);
+    document.addEventListener("scroll", measure, true);
+    return () => {
+      window.removeEventListener("resize", measure);
+      document.removeEventListener("scroll", measure, true);
+    };
+  }, [open, position]);
 
   useEffect(() => {
     if (!open) return;
@@ -48,14 +107,24 @@ export function Popover({
 
   return (
     <div ref={ref} className="relative">
-      <div onClick={() => setOpen((o) => !o)}>{trigger(open)}</div>
+      <div
+        onClick={() => {
+          setOpen((o) => {
+            onOpenChange?.(!o);
+            return !o;
+          });
+        }}
+      >
+        {trigger(open)}
+      </div>
       {open ? (
         <div
+          ref={panelRef}
+          style={pos ?? undefined}
           className={cn(
-            "anim-fade-in absolute z-40 rounded-xl border border-rule bg-card3 p-2 shadow-lift",
-            place === "bottom" ? "mt-2" : "bottom-full mb-2",
-            align === "end" ? "right-0" : "left-0",
+            "anim-fade-in absolute rounded-xl border border-rule bg-card3 p-2 shadow-lift",
             width,
+            z,
           )}
         >
           {children}
@@ -446,6 +515,94 @@ export function TagPicker({
         </button>
       </form>
     </Popover>
+  );
+}
+
+/* --------------------------------- assignee --------------------------------- */
+
+export function AssigneeField({
+  value,
+  suggestions,
+  onChange,
+}: {
+  value: string | null;
+  suggestions: string[];
+  onChange: (value: string | null) => void;
+}) {
+  const [text, setText] = useState(value ?? "");
+  const [show, setShow] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setText(value ?? "");
+  }, [value]);
+
+  useEffect(() => {
+    if (!show) return;
+    const onDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setShow(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [show]);
+
+  const q = text.trim().toLowerCase();
+  const matches = (q ? suggestions.filter((s) => s.toLowerCase().includes(q)) : suggestions).slice(
+    0,
+    6,
+  );
+
+  return (
+    <div ref={ref} className="relative">
+      <div className="flex items-center gap-2 rounded-xl border border-rule bg-card px-3 py-2 transition-colors focus-within:border-accent">
+        <UserIcon className="size-4 shrink-0 text-inkdim" />
+        <input
+          value={text}
+          onChange={(e) => {
+            const v = e.target.value;
+            setText(v);
+            setShow(true);
+            onChange(v.trim() ? v.trim() : null);
+          }}
+          onFocus={() => setShow(true)}
+          placeholder="Assign to someone…"
+          aria-label="Assignee"
+          className="w-full flex-1 bg-transparent text-sm outline-none placeholder:text-inkfaint"
+        />
+        {value ? (
+          <button
+            type="button"
+            onClick={() => {
+              setText("");
+              onChange(null);
+            }}
+            aria-label="Clear assignee"
+            className="cursor-pointer rounded-md p-0.5 text-inkfaint transition-colors hover:text-accent"
+          >
+            <XIcon className="size-3.5" />
+          </button>
+        ) : null}
+      </div>
+      {show && matches.length > 0 ? (
+        <div className="absolute left-0 right-0 top-full z-10 mt-1 max-h-48 overflow-y-auto rounded-xl border border-rule bg-card3 p-1 shadow-lift">
+          {matches.map((name) => (
+            <button
+              key={name}
+              type="button"
+              onClick={() => {
+                setText(name);
+                setShow(false);
+                onChange(name);
+              }}
+              className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm text-inkdim transition-colors hover:bg-card2 hover:text-ink"
+            >
+              <UserIcon className="size-3.5" />
+              <span className="flex-1 truncate">{name}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
   );
 }
 

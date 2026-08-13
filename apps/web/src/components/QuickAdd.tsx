@@ -10,8 +10,8 @@ import { useRef, useState } from "react";
 import { ApiError, tasksApi } from "../lib/api";
 import { cn } from "../lib/cn";
 import { invalidateAll } from "../lib/mutations";
-import { Popover } from "./fields";
-import { CalendarIcon, PlusIcon, XIcon } from "./icons";
+import { AssigneeField, Popover } from "./fields";
+import { CalendarIcon, PlusIcon, UserIcon, XIcon } from "./icons";
 import { useToast } from "./ui";
 
 const inputCls =
@@ -37,26 +37,35 @@ export function QuickAdd({
   autoFocus,
   placeholder,
   className,
+  assignees,
 }: {
   listId?: string | null;
   tagIds?: string[];
   autoFocus?: boolean;
   placeholder?: string;
   className?: string;
+  assignees?: string[];
 }) {
   const [title, setTitle] = useState("");
   const [date, setDate] = useState<string | null>(null);
   const [time, setTime] = useState<string | null>(null);
+  const [assignee, setAssignee] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const today = startOfToday();
 
   const create = useMutation({
-    mutationFn: (body: { title: string; date: string | null; time: string | null }) =>
+    mutationFn: (body: {
+      title: string;
+      date: string | null;
+      time: string | null;
+      assignee: string | null;
+    }) =>
       tasksApi.create({
         title: body.title,
         dueDate: body.date,
         dueTime: body.time,
+        assignee: body.assignee,
         listId: listId ?? undefined,
         tagIds,
       }),
@@ -64,6 +73,7 @@ export function QuickAdd({
       setTitle("");
       setDate(null);
       setTime(null);
+      setAssignee(null);
       invalidateAll();
       inputRef.current?.focus();
     },
@@ -90,7 +100,7 @@ export function QuickAdd({
         autoFocus={autoFocus}
         onKeyDown={(e) => {
           if (e.key === "Enter" && title.trim()) {
-            create.mutate({ title: title.trim(), date, time });
+            create.mutate({ title: title.trim(), date, time, assignee });
           }
         }}
         placeholder={placeholder ?? "Add a task and press Enter…"}
@@ -112,6 +122,42 @@ export function QuickAdd({
             <XIcon className="size-3" />
           </button>
         ) : null}
+        {assignee ? (
+          <button
+            type="button"
+            onClick={() => setAssignee(null)}
+            title="Clear assignee"
+            className="flex items-center gap-1 rounded-lg bg-card2 px-2 py-1 text-xs font-medium text-inkdim"
+          >
+            <UserIcon className="size-3" />
+            {assignee}
+            <XIcon className="size-3" />
+          </button>
+        ) : null}
+        <Popover
+          trigger={(open) => (
+            <button
+              type="button"
+              aria-label="Assign someone"
+              title="Assign someone"
+              className={cn(
+                "grid size-8 cursor-pointer place-items-center rounded-lg text-inkdim transition-colors hover:bg-card2 hover:text-ink",
+                open && "bg-card2 text-ink",
+                assignee && "text-accent",
+              )}
+            >
+              <UserIcon className="size-4" />
+            </button>
+          )}
+          width="w-56"
+          z="z-50"
+        >
+          <AssigneeField
+            value={assignee}
+            suggestions={assignees ?? []}
+            onChange={(v) => setAssignee(v)}
+          />
+        </Popover>
         <Popover
           trigger={(open) => (
             <button
@@ -126,6 +172,10 @@ export function QuickAdd({
               <CalendarIcon className="size-4" />
             </button>
           )}
+          z="z-50"
+          onOpenChange={(o) => {
+            if (o && !date) setDate(today);
+          }}
         >
           <div className="space-y-2">
             <div className="grid grid-cols-3 gap-1.5">

@@ -9,7 +9,7 @@ import {
 import { memo } from "react";
 import type { TaskWithRelations } from "../lib/api";
 import { cn } from "../lib/cn";
-import { CheckIcon, GripIcon, RepeatIcon } from "./icons";
+import { CheckIcon, GripIcon, RepeatIcon, UserIcon } from "./icons";
 import { PriorityBadge } from "./PriorityBadge";
 import { Checkbox } from "./ui";
 
@@ -156,6 +156,15 @@ export const TaskItem = memo(function TaskItem({
 
         <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 pl-0">
           <DueChip task={task} />
+          {task.assignee ? (
+            <span
+              title={`Assigned to ${task.assignee}`}
+              className="inline-flex items-center gap-1 rounded-md bg-card2 px-1.5 py-0.5 text-[11px] font-medium text-inkdim"
+            >
+              <UserIcon className="size-3" />
+              {task.assignee}
+            </span>
+          ) : null}
           {hasSubtasks && !task.completedAt ? (
             <span
               className={cn(

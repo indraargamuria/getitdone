@@ -2,7 +2,14 @@ import { nowISO } from "@getitdone/shared";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { ZodError } from "zod";
-import { getDb, listCounts, listCountsByList, listLists, listTags } from "./db/queries";
+import {
+  getDb,
+  listAssignees,
+  listCounts,
+  listCountsByList,
+  listLists,
+  listTags,
+} from "./db/queries";
 import { csrfGuard, sessionMiddleware } from "./middleware";
 import { authRoutes } from "./routes/auth";
 import { listRoutes } from "./routes/lists";
@@ -50,13 +57,14 @@ export function createApp(env: DBEnv) {
     const user = c.get("user");
     if (!user) return c.json({ error: "Unauthorized" }, 401);
     const db = getDb(c.env.DB);
-    const [lists, tags, counts, perListCounts] = await Promise.all([
+    const [lists, tags, counts, perListCounts, assignees] = await Promise.all([
       listLists(db, user.id),
       listTags(db, user.id),
       listCounts(db, user.id),
       listCountsByList(db, user.id),
+      listAssignees(db, user.id),
     ]);
-    return c.json({ user, lists, tags, counts, listCounts: perListCounts });
+    return c.json({ user, lists, tags, counts, listCounts: perListCounts, assignees });
   });
 
   app.route("/api/auth", authRoutes);

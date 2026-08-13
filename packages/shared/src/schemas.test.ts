@@ -48,6 +48,16 @@ describe("task schemas", () => {
   it("rejects titles longer than 500 characters", () => {
     expect(() => taskCreateInputSchema.parse({ title: "a".repeat(501) })).toThrow();
   });
+
+  it("accepts an assignee and trims it on save", () => {
+    const parsed = taskInputSchema.parse({ assignee: "  Rina  " });
+    expect(parsed.assignee).toBe("  Rina  ");
+    expect(taskInputSchema.parse({ assignee: null }).assignee).toBeNull();
+  });
+
+  it("rejects an assignee longer than 80 characters", () => {
+    expect(() => taskInputSchema.parse({ assignee: "a".repeat(81) })).toThrow();
+  });
 });
 
 describe("subtask-aware completion", () => {

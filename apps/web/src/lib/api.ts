@@ -64,7 +64,8 @@ export interface Bootstrap {
   lists: List[];
   tags: Tag[];
   counts: { today: number; week: number; inbox: number; all: number; completed: number };
-  listCounts: Record<string, { open: number; completed: number }>;
+  listCounts: Record<string, { open: number; completed: number; urgent: boolean }>;
+  assignees: string[];
 }
 
 export interface TaskListResponse {

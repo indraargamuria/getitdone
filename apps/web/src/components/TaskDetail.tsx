@@ -5,6 +5,7 @@ import { listsApi, type TaskWithRelations, tagsApi, tasksApi } from "../lib/api"
 import { cn } from "../lib/cn";
 import { invalidateAll } from "../lib/mutations";
 import {
+  AssigneeField,
   DateField,
   type DateTimeValue,
   ListPicker,
@@ -12,7 +13,7 @@ import {
   RecurrenceField,
   TagPicker,
 } from "./fields";
-import { CalendarIcon, NoteIcon, PlusIcon, RepeatIcon, TrashIcon, XIcon } from "./icons";
+import { CalendarIcon, NoteIcon, PlusIcon, RepeatIcon, TrashIcon, UserIcon, XIcon } from "./icons";
 import { PriorityBadge } from "./PriorityBadge";
 import { Checkbox, useToast } from "./ui";
 
@@ -31,12 +32,14 @@ export function TaskDetail({
   task,
   lists,
   tags,
+  assignees,
   onClose,
   onChanged,
 }: {
   task: TaskWithRelations;
   lists: List[];
   tags: Tag[];
+  assignees: string[];
   onClose: () => void;
   onChanged: () => void;
 }) {
@@ -50,6 +53,7 @@ export function TaskDetail({
   const [listId, setListId] = useState<string | null>(task.listId);
   const [recurrence, setRecurrence] = useState<string | null>(task.recurrence);
   const [tagIds, setTagIds] = useState<string[]>(task.tags.map((t) => t.id));
+  const [assignee, setAssignee] = useState<string | null>(task.assignee);
   const [subtasks, setSubtasks] = useState<Subtask[]>(task.subtasks);
   const [subInput, setSubInput] = useState("");
   const completed = !!task.completedAt;
@@ -238,6 +242,17 @@ export function TaskDetail({
             </div>
           </Section>
 
+          <Section label="Assignee">
+            <AssigneeField
+              value={assignee}
+              suggestions={assignees}
+              onChange={(v) => {
+                setAssignee(v);
+                save({ assignee: v });
+              }}
+            />
+          </Section>
+
           <div className="space-y-4">
             <Section label="List">
               <ListPicker
@@ -350,6 +365,12 @@ export function TaskDetail({
             Delete
           </button>
           <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.18em] text-inkfaint">
+            {task.assignee ? (
+              <span className="flex items-center gap-1">
+                <UserIcon className="size-3" />
+                {task.assignee}
+              </span>
+            ) : null}
             {task.dueDate ? (
               <span className="flex items-center gap-1">
                 <CalendarIcon className="size-3" />

@@ -301,6 +301,7 @@ function toTask(r: typeof tasks.$inferSelect): Task {
     dueDate: r.dueDate,
     dueTime: r.dueTime,
     completedAt: r.completedAt,
+    assignee: r.assignee,
     recurrence: r.recurrence,
     sortOrder: r.sortOrder,
     createdAt: r.createdAt,
@@ -448,6 +449,7 @@ export async function createTask(
       priority: input.priority ?? 4,
       dueDate: input.dueDate ?? null,
       dueTime: input.dueTime ?? null,
+      assignee: input.assignee ?? null,
       recurrence: input.recurrence ?? null,
       sortOrder: input.sortOrder ?? Date.now(),
       createdAt: now,
@@ -492,6 +494,7 @@ export async function updateTask(
     "priority",
     "dueDate",
     "dueTime",
+    "assignee",
     "recurrence",
   ] as const) {
     if (patch[key] !== undefined) clean[key] = patch[key];
@@ -544,6 +547,7 @@ export async function setTaskCompleted(
           priority: existing.priority,
           dueDate: nextDate,
           dueTime: existing.dueTime,
+          assignee: existing.assignee,
           recurrence: existing.recurrence,
           sortOrder: existing.sortOrder,
           createdAt: now,
@@ -585,11 +589,13 @@ export async function setTaskCompleted(
 export interface ListCounts {
   open: number;
   completed: number;
+  /** True when an open task in the list's subtree is due today or overdue. */
+  urgent: boolean;
 }
 
 /**
  * Open/completed task counts for every list, including tasks in descendant
- * sub-lists (matching what the list view shows).
+ * sub-lists (matching what the list view shows). `urgent` rolls up the same way.
  */
 export async function listCountsByList(
   db: DB,
@@ -620,17 +626,26 @@ export async function listCountsByList(
   }
 
   const taskRows = await db
-    .select({ id: tasks.id, listId: tasks.listId, completedAt: tasks.completedAt })
+    .select({
+      id: tasks.id,
+      listId: tasks.listId,
+      completedAt: tasks.completedAt,
+      dueDate: tasks.dueDate,
+    })
     .from(tasks)
     .where(eq(tasks.userId, userId));
   const subState = await subtaskStateByTask(db, userId);
+  const today = startOfToday();
   const direct = new Map<string, ListCounts>();
   for (const t of taskRows) {
     if (!t.listId) continue;
     const units = progressUnits(t, subState);
-    const c = direct.get(t.listId) ?? { open: 0, completed: 0 };
+    const c = direct.get(t.listId) ?? { open: 0, completed: 0, urgent: false };
     c.open += units.open;
     c.completed += units.completed;
+    const sub = subState.get(t.id);
+    const effectivelyDone = sub ? sub.done === sub.total : !!t.completedAt;
+    if (!effectivelyDone && t.dueDate && t.dueDate <= today) c.urgent = true;
     direct.set(t.listId, c);
   }
 
@@ -638,14 +653,16 @@ export async function listCountsByList(
   for (const l of listRows) {
     let open = 0;
     let completed = 0;
+    let urgent = false;
     for (const id of withDescendants.get(l.id) ?? []) {
       const c = direct.get(id);
       if (c) {
         open += c.open;
         completed += c.completed;
+        if (c.urgent) urgent = true;
       }
     }
-    result[l.id] = { open, completed };
+    result[l.id] = { open, completed, urgent };
   }
   return result;
 }
@@ -901,4 +918,21 @@ export async function listCounts(
     if (!t.listId) inboxC += units.open;
   }
   return { today: todayC, week: weekC, inbox: inboxC, all: allC, completed: completedC };
+}
+
+/** Distinct, non-empty assignee names, most-used first — for quick-add suggestions. */
+export async function listAssignees(db: DB, userId: string): Promise<string[]> {
+  const rows = await db
+    .select({ assignee: tasks.assignee, count: sql<number>`count(*)` })
+    .from(tasks)
+    .where(
+      and(
+        eq(tasks.userId, userId),
+        sql`${tasks.assignee} IS NOT NULL`,
+        sql`length(${tasks.assignee}) > 0`,
+      ),
+    )
+    .groupBy(tasks.assignee)
+    .orderBy(desc(sql`count(*)`));
+  return rows.map((r) => r.assignee!);
 }

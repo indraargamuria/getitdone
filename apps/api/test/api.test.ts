@@ -2,7 +2,7 @@ import { drizzle } from "drizzle-orm/d1";
 import { migrate } from "drizzle-orm/d1/migrator";
 import { Miniflare } from "miniflare";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { nextOccurrenceAfter, toDateStr } from "@getitdone/shared";
+import { addDaysStr, nextOccurrenceAfter, toDateStr } from "@getitdone/shared";
 import { createApp } from "../src/app";
 
 let mf: Miniflare;
@@ -198,7 +198,7 @@ describe("lists + tags", () => {
       cookie: sessionCookie,
     });
     const { body } = await json(await request("/api/bootstrap", { cookie: sessionCookie }));
-    expect(body.listCounts[listId]).toEqual({ open: 1, completed: 1 });
+    expect(body.listCounts[listId]).toEqual({ open: 1, completed: 1, urgent: false });
     expect(body.listCounts[t1.body.task?.id]).toBeUndefined();
   });
 });
@@ -437,6 +437,80 @@ describe("tasks", () => {
     );
     expect(del.status).toBe(200);
   });
+
+  it("saves and updates an assignee", async () => {
+    const created = await json(
+      await request("/api/tasks", {
+        method: "POST",
+        body: { title: "Assignable", assignee: "Rina" },
+        cookie: sessionCookie,
+      }),
+    );
+    expect(created.status).toBe(201);
+    expect(created.body.task?.assignee).toBe("Rina");
+    const updated = await json(
+      await request(`/api/tasks/${created.body.task?.id}`, {
+        method: "PATCH",
+        body: { assignee: "Budi" },
+        cookie: sessionCookie,
+      }),
+    );
+    expect(updated.body.task?.assignee).toBe("Budi");
+    const cleared = await json(
+      await request(`/api/tasks/${created.body.task?.id}`, {
+        method: "PATCH",
+        body: { assignee: null },
+        cookie: sessionCookie,
+      }),
+    );
+    expect(cleared.body.task?.assignee).toBeNull();
+  });
+
+  it("lists known assignees for suggestions", async () => {
+    await request("/api/tasks", {
+      method: "POST",
+      body: { title: "Another", assignee: "Rina" },
+      cookie: sessionCookie,
+    });
+    const { body } = await json(await request("/api/bootstrap", { cookie: sessionCookie }));
+    expect(Array.isArray(body.assignees)).toBe(true);
+    expect(body.assignees).toContain("Rina");
+  });
+
+  it("flags a list urgent when an open task is due today", async () => {
+    const list = await json(
+      await request("/api/lists", { method: "POST", body: { name: "Urgent List" }, cookie: sessionCookie }),
+    );
+    const listId = list.body.list?.id;
+    await request("/api/tasks", {
+      method: "POST",
+      body: { title: "due today", listId, dueDate: toDateStr(new Date()) },
+      cookie: sessionCookie,
+    });
+    await request("/api/tasks", {
+      method: "POST",
+      body: { title: "due later", listId, dueDate: addDaysStr(toDateStr(new Date()), 5) },
+      cookie: sessionCookie,
+    });
+    const boot = (await json(await request("/api/bootstrap", { cookie: sessionCookie }))).body;
+    expect(boot.listCounts[listId].urgent).toBe(true);
+
+    await request("/api/tasks", {
+      method: "POST",
+      body: { title: "no due date", listId },
+      cookie: sessionCookie,
+    });
+    const calm = await json(
+      await request("/api/lists", { method: "POST", body: { name: "Calm List" }, cookie: sessionCookie }),
+    );
+    await request("/api/tasks", {
+      method: "POST",
+      body: { title: "tomorrow", listId: calm.body.list?.id, dueDate: addDaysStr(toDateStr(new Date()), 1) },
+      cookie: sessionCookie,
+    });
+    const boot2 = (await json(await request("/api/bootstrap", { cookie: sessionCookie }))).body;
+    expect(boot2.listCounts[calm.body.list?.id].urgent).toBe(false);
+  });
 });
 
 describe("recurrence", () => {
@@ -560,7 +634,7 @@ describe("subtask-aware completion", () => {
     const [sub1, sub2] = created.body.task?.subtasks ?? [];
 
     let boot = (await json(await request("/api/bootstrap", { cookie: sessionCookie }))).body;
-    expect(boot.listCounts[listId]).toEqual({ open: 2, completed: 0 });
+    expect(boot.listCounts[listId]).toEqual({ open: 2, completed: 0, urgent: false });
 
     await request(`/api/tasks/subtasks/${sub1?.id}/complete`, {
       method: "POST",
@@ -568,7 +642,7 @@ describe("subtask-aware completion", () => {
       cookie: sessionCookie,
     });
     boot = (await json(await request("/api/bootstrap", { cookie: sessionCookie }))).body;
-    expect(boot.listCounts[listId]).toEqual({ open: 1, completed: 1 });
+    expect(boot.listCounts[listId]).toEqual({ open: 1, completed: 1, urgent: false });
 
     await request(`/api/tasks/subtasks/${sub2?.id}/complete`, {
       method: "POST",
@@ -576,7 +650,7 @@ describe("subtask-aware completion", () => {
       cookie: sessionCookie,
     });
     boot = (await json(await request("/api/bootstrap", { cookie: sessionCookie }))).body;
-    expect(boot.listCounts[listId]).toEqual({ open: 0, completed: 2 });
+    expect(boot.listCounts[listId]).toEqual({ open: 0, completed: 2, urgent: false });
     expect(taskId).toBeTruthy();
   });
 

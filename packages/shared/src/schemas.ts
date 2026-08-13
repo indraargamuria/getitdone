@@ -85,6 +85,7 @@ export const subtaskInputSchema = z.object({
 export const prioritySchema = z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]);
 
 export const TASK_TITLE_MAX = 500;
+export const ASSIGNEE_MAX = 80;
 
 export const taskSchema = z.object({
   id: ID,
@@ -95,6 +96,7 @@ export const taskSchema = z.object({
   dueDate: dateStr.nullable(),
   dueTime: timeStr.nullable(),
   completedAt: z.string().nullable(),
+  assignee: z.string().max(ASSIGNEE_MAX).nullable(),
   recurrence: z.string().max(200).nullable(),
   sortOrder: z.number(),
   createdAt: z.string(),
@@ -109,6 +111,7 @@ export const taskInputSchema = z.object({
   dueDate: dateStr.nullable().optional(),
   dueTime: timeStr.nullable().optional(),
   completedAt: z.string().nullable().optional(),
+  assignee: z.string().max(ASSIGNEE_MAX).nullable().optional(),
   recurrence: z.string().max(200).nullable().optional(),
   sortOrder: z.number().optional(),
 });

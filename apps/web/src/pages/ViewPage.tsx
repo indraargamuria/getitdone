@@ -336,6 +336,7 @@ export default function ViewPage() {
         <QuickAdd
           listId={quickAddListId}
           tagIds={quickAddTagIds}
+          assignees={bootstrap.data?.assignees}
           placeholder={cfg.kind === "search" ? "Add a task…" : undefined}
         />
       </div>

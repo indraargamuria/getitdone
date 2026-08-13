@@ -316,6 +316,14 @@ export function Sidebar({
                   </span>
                 </span>
               ) : null}
+              {counts?.urgent ? (
+                <span
+                  title="Has a task due today or overdue"
+                  className="grid size-4 shrink-0 place-items-center rounded-full bg-accent text-[10px] font-bold leading-none text-card3"
+                >
+                  !
+                </span>
+              ) : null}
             </NavLink>
             <Popover
               trigger={() => (

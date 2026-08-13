@@ -109,6 +109,7 @@ export default function AppShell() {
             task={selected.data.task}
             lists={data.lists}
             tags={data.tags}
+            assignees={data.assignees}
             onClose={() => setSelectedId(null)}
             onChanged={() => bootstrap.refetch()}
           />
