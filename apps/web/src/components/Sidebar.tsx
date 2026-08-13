@@ -1,7 +1,7 @@
 import type { List, Tag } from "@getitdone/shared";
 import { useMutation } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { NavLink } from "react-router";
+import { NavLink, useLocation, useNavigate } from "react-router";
 import type { ThemeMode } from "../hooks/useTheme";
 import type { Bootstrap } from "../lib/api";
 import { listsApi, tagsApi } from "../lib/api";
@@ -16,12 +16,15 @@ import {
   ChevronDownIcon,
   ChevronRightIcon,
   ChevronUpIcon,
+  EyeIcon,
+  EyeOffIcon,
   InboxIcon,
   LayersIcon,
   ListIcon,
   LogoutIcon,
   MoonIcon,
   PlusIcon,
+  SettingsIcon,
   SparkIcon,
   StampIcon,
   SunIcon,
@@ -33,6 +36,7 @@ import { useToast } from "./ui";
 
 const ROOT_PARENT = "__root__";
 const COLLAPSE_KEY = "gt_collapsed_lists";
+const HIDE_KEY = "gt_hidden_lists";
 
 function NavItem({
   to,
@@ -107,6 +111,8 @@ export function Sidebar({
   setTheme: (t: ThemeMode) => void;
 }) {
   const { toast } = useToast();
+  const navigate = useNavigate();
+  const location = useLocation();
   const [listModal, setListModal] = useState<
     { mode: "create"; parentId: string | null } | { mode: "rename"; list: List } | null
   >(null);
@@ -129,6 +135,37 @@ export function Sidebar({
     }
   });
 
+  const [hiddenIds, setHiddenIds] = useState<Set<string>>(() => {
+    try {
+      const raw = localStorage.getItem(HIDE_KEY);
+      const parsed = raw ? (JSON.parse(raw) as string[]) : [];
+      return new Set(Array.isArray(parsed) ? parsed : []);
+    } catch {
+      return new Set();
+    }
+  });
+
+  function updateHidden(next: Set<string>) {
+    setHiddenIds(next);
+    try {
+      localStorage.setItem(HIDE_KEY, JSON.stringify([...next]));
+    } catch {
+      /* storage unavailable — state still updates for this session */
+    }
+  }
+
+  function hideList(id: string) {
+    updateHidden(new Set([...hiddenIds, id]));
+    if (location.pathname === `/list/${id}` || location.pathname.startsWith(`/list/${id}/`)) {
+      navigate("/all");
+    }
+    toast("info", "List hidden — manage it in Settings");
+  }
+
+  function showList(id: string) {
+    updateHidden(new Set([...hiddenIds].filter((x) => x !== id)));
+  }
+
   function toggleCollapsed(id: string) {
     setCollapsedIds((prev) => {
       const next = new Set(prev);
@@ -146,6 +183,12 @@ export function Sidebar({
   const lists = data.lists;
   const tags = data.tags;
 
+  const hiddenLists = useMemo(() => lists.filter((l) => hiddenIds.has(l.id)), [lists, hiddenIds]);
+  const topHidden = useMemo(
+    () => hiddenLists.filter((l) => !l.parentId || !hiddenIds.has(l.parentId)),
+    [hiddenLists, hiddenIds],
+  );
+
   const invalidate = () => invalidateAll();
 
   const childrenOf = useMemo(() => {
@@ -157,6 +200,11 @@ export function Sidebar({
     }
     return map;
   }, [lists]);
+
+  const visibleRootLists = useMemo(
+    () => (childrenOf.get(ROOT_PARENT) ?? []).filter((l) => !hiddenIds.has(l.id)),
+    [childrenOf, hiddenIds],
+  );
 
   const createList = useMutation({
     mutationFn: (input: ListModalInput) => listsApi.create(input),
@@ -200,7 +248,7 @@ export function Sidebar({
   }
 
   function renderLists(parentKey: string, depth: number) {
-    const siblings = childrenOf.get(parentKey) ?? [];
+    const siblings = (childrenOf.get(parentKey) ?? []).filter((l) => !hiddenIds.has(l.id));
     return siblings.map((list, index) => {
       const hasChildren = (childrenOf.get(list.id) ?? []).length > 0;
       const collapsed = hasChildren && collapsedIds.has(list.id);
@@ -320,6 +368,12 @@ export function Sidebar({
                     Down
                   </MenuButton>
                 </div>
+                <MenuButton
+                  icon={<EyeOffIcon className="size-3.5" />}
+                  onClick={() => hideList(list.id)}
+                >
+                  Hide
+                </MenuButton>
                 <MenuButton
                   icon={<TrashIcon className="size-3.5" />}
                   onClick={() =>
@@ -442,6 +496,10 @@ export function Sidebar({
             <p className="px-2.5 py-2 text-xs text-inkfaint">
               No lists yet — make one for each part of your life.
             </p>
+          ) : visibleRootLists.length === 0 ? (
+            <p className="px-2.5 py-2 text-xs text-inkfaint">
+              All lists hidden — restore them in Settings.
+            </p>
           ) : (
             renderLists(ROOT_PARENT, 0)
           )}
@@ -547,6 +605,64 @@ export function Sidebar({
             </p>
             <p className="truncate font-mono text-[10px] text-inkfaint">{user.email}</p>
           </div>
+          <Popover
+            trigger={() => (
+              <button
+                type="button"
+                aria-label="Settings"
+                title="Settings"
+                className="relative grid size-8 shrink-0 cursor-pointer place-items-center rounded-lg text-inkfaint transition-colors hover:bg-card2 hover:text-accent"
+              >
+                <SettingsIcon className="size-4" />
+                {topHidden.length > 0 ? (
+                  <span className="absolute -right-0.5 -top-0.5 grid size-4 place-items-center rounded-full bg-accent font-mono text-[9px] leading-none text-card3">
+                    {topHidden.length}
+                  </span>
+                ) : null}
+              </button>
+            )}
+            place="top"
+            width="w-64"
+          >
+            <div className="max-h-72 overflow-y-auto">
+              <p className="px-2 pb-1.5 pt-0.5 font-mono text-[10px] uppercase tracking-[0.22em] text-inkfaint">
+                Hidden lists
+              </p>
+              {topHidden.length === 0 ? (
+                <p className="px-2 py-2 text-xs leading-relaxed text-inkfaint">
+                  Nothing hidden — lists you hide will show up here so you can bring them back.
+                </p>
+              ) : (
+                <div className="space-y-0.5">
+                  {topHidden.map((list) => (
+                    <div key={list.id} className="flex items-center gap-2 rounded-lg px-2 py-1.5">
+                      <span
+                        className="grid size-5 shrink-0 place-items-center rounded-md text-card3"
+                        style={{ background: list.color }}
+                      >
+                        {list.icon ? (
+                          <ListIconGlyph icon={list.icon} className="size-3" />
+                        ) : (
+                          <ListIcon className="size-3" />
+                        )}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-[13px] text-ink">
+                        {list.name}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => showList(list.id)}
+                        className="flex shrink-0 cursor-pointer items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-inkdim transition-colors hover:bg-card2 hover:text-ink"
+                      >
+                        <EyeIcon className="size-3.5" />
+                        Show
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </Popover>
           <button
             type="button"
             onClick={onLogout}

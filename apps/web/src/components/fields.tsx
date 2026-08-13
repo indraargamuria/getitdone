@@ -19,11 +19,13 @@ export function Popover({
   children,
   align = "end",
   width = "w-72",
+  place = "bottom",
 }: {
   trigger: (open: boolean) => ReactNode;
   children: ReactNode;
   align?: "start" | "end";
   width?: string;
+  place?: "top" | "bottom";
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -50,7 +52,8 @@ export function Popover({
       {open ? (
         <div
           className={cn(
-            "anim-fade-in absolute z-40 mt-2 rounded-xl border border-rule bg-card3 p-2 shadow-lift",
+            "anim-fade-in absolute z-40 rounded-xl border border-rule bg-card3 p-2 shadow-lift",
+            place === "bottom" ? "mt-2" : "bottom-full mb-2",
             align === "end" ? "right-0" : "left-0",
             width,
           )}
