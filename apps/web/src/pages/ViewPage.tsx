@@ -186,6 +186,11 @@ export default function ViewPage() {
     [bootstrap.data?.lists],
   );
 
+  const hasSubLists = useMemo(
+    () => (bootstrap.data?.lists ?? []).some((l) => l.parentId === id),
+    [bootstrap.data?.lists, id],
+  );
+
   const resolvedTitle =
     cfg.kind === "list"
       ? (list?.name ?? "List")
@@ -372,7 +377,14 @@ export default function ViewPage() {
             }
             onReorder={handleReorder}
             sortable={cfg.kind !== "search" && cfg.smart !== "completed"}
-            getList={cfg.kind === "list" ? undefined : (listId) => listById.get(listId)}
+            getList={
+              cfg.kind !== "list"
+                ? (listId) => listById.get(listId)
+                : hasSubLists
+                  ? (listId) => (listId && listId !== id ? listById.get(listId) : undefined)
+                  : undefined
+            }
+            compact={cfg.smart === "completed"}
           />
         )}
       </div>

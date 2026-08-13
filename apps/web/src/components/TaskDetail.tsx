@@ -313,7 +313,7 @@ export function TaskDetail({
                 onBlur={flushNotes}
                 rows={8}
                 placeholder="Details, links, context…"
-                className="max-h-80 w-full resize-none overflow-y-auto bg-transparent px-3 pb-3 text-sm leading-relaxed text-ink outline-none placeholder:text-inkfaint"
+                className="min-h-32 w-full resize-y bg-transparent px-3 pb-3 text-sm leading-relaxed text-ink outline-none placeholder:text-inkfaint"
               />
             </div>
           </Section>

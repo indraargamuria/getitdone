@@ -12,6 +12,7 @@ export function TaskList({
   onReorder,
   sortable = true,
   getList,
+  compact = false,
 }: {
   tasks: TaskWithRelations[];
   activeId?: string | null;
@@ -21,6 +22,7 @@ export function TaskList({
   onReorder: (orderedIds: string[]) => void;
   sortable?: boolean;
   getList?: (listId: string) => List | undefined;
+  compact?: boolean;
 }) {
   const [dragId, setDragId] = useState<string | null>(null);
   const [over, setOver] = useState<{ id: string; pos: "above" | "below" } | null>(null);
@@ -108,6 +110,7 @@ export function TaskList({
               }
               dragProps={makeDragProps(task.id)}
               list={task.listId ? getList?.(task.listId) : undefined}
+              compact={compact}
             />
           </li>
         ))}
@@ -135,6 +138,7 @@ export function TaskList({
                       : undefined
                   }
                   list={task.listId ? getList?.(task.listId) : undefined}
+                  compact={compact}
                 />
               </li>
             ))}

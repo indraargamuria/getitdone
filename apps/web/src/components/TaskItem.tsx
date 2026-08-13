@@ -83,6 +83,7 @@ export const TaskItem = memo(function TaskItem({
   onToggleSubtask,
   dragProps,
   list,
+  compact = false,
 }: {
   task: TaskWithRelations;
   active: boolean;
@@ -99,6 +100,7 @@ export const TaskItem = memo(function TaskItem({
     isDragging: boolean;
   };
   list?: { name: string; color: string };
+  compact?: boolean;
 }) {
   const { done: subDone, total: subTotal } = subtaskProgress(task.subtasks);
   const hasSubtasks = task.subtasks.length > 0;
@@ -114,7 +116,8 @@ export const TaskItem = memo(function TaskItem({
       onDragEnd={dragProps?.onDragEnd}
       onClick={onSelect}
       className={cn(
-        "group relative flex cursor-pointer items-start gap-3 rounded-xl px-2 py-3 transition-colors sm:px-3",
+        "group relative flex cursor-pointer items-start gap-3 rounded-xl px-2 transition-colors sm:px-3",
+        compact ? "py-2" : "py-3",
         "hover:bg-card/80",
         active && "bg-accentsoft/60 hover:bg-accentsoft/80",
         dragProps?.isOver && "ring-2 ring-accent/50 ring-inset",
@@ -136,7 +139,8 @@ export const TaskItem = memo(function TaskItem({
           {priority ? <PriorityBadge priority={task.priority} className="mt-0.5" /> : null}
           <p
             className={cn(
-              "break-words text-[15px] leading-snug text-ink transition-colors",
+              "break-words leading-snug text-ink transition-colors",
+              compact ? "text-[13.5px]" : "text-[15px]",
               done && "done-strike is-done text-inkfaint line-through",
             )}
           >
