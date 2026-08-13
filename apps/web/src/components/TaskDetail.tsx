@@ -45,6 +45,7 @@ export function TaskDetail({
 }) {
   const { toast } = useToast();
   const [title, setTitle] = useState(task.title);
+  const titleRef = useRef<HTMLTextAreaElement>(null);
   const [notes, setNotes] = useState(task.notes ?? "");
   const notesRef = useRef(notes);
   const notesTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -92,6 +93,13 @@ export function TaskDetail({
     },
     [],
   );
+
+  useEffect(() => {
+    const el = titleRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, []);
 
   useEffect(() => {
     const el = notesAreaRef.current;
@@ -184,15 +192,26 @@ export function TaskDetail({
       >
         <header className="flex items-start gap-3 border-b border-rule px-5 py-4">
           <div className="mt-1 flex flex-1 flex-col gap-1">
-            <input
+            <textarea
+              ref={titleRef}
               value={title}
-              onChange={(e) => setTitle(e.target.value)}
+              onChange={(e) => {
+                const v = e.target.value;
+                setTitle(v);
+                const el = e.currentTarget;
+                el.style.height = "auto";
+                el.style.height = `${el.scrollHeight}px`;
+              }}
               onBlur={() => title.trim() && title !== task.title && save({ title: title.trim() })}
               onKeyDown={(e) => {
-                if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  (e.target as HTMLTextAreaElement).blur();
+                }
               }}
+              rows={1}
               placeholder="Task title"
-              className="w-full bg-transparent text-xl font-semibold text-ink outline-none placeholder:text-inkfaint"
+              className="w-full resize-none bg-transparent text-xl leading-snug font-semibold text-ink outline-none placeholder:text-inkfaint"
             />
             <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-inkfaint tabnum">
               {completed ? "Completed" : "Open"} · {new Date(task.createdAt).toLocaleDateString()}
