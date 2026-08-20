@@ -3,6 +3,7 @@ import {
   completionPct,
   effectiveTaskDone,
   subtaskProgress,
+  subtaskUpdateInputSchema,
   taskCreateInputSchema,
   taskInputSchema,
   validateTaskFields,
@@ -91,5 +92,27 @@ describe("subtask-aware completion", () => {
     expect(subtaskProgress(subs)).toEqual({ done: 2, total: 3 });
     expect(completionPct(2, 3)).toBe(67);
     expect(completionPct(0, 0)).toBe(0);
+  });
+});
+
+describe("subtask rename schema", () => {
+  it("accepts a new title and trims it", () => {
+    expect(subtaskUpdateInputSchema.parse({ title: "  Buy oat milk  " }).title).toBe(
+      "Buy oat milk",
+    );
+  });
+
+  it("rejects an empty or whitespace-only title", () => {
+    expect(() => subtaskUpdateInputSchema.parse({ title: "" })).toThrow();
+    expect(() => subtaskUpdateInputSchema.parse({ title: "   " })).toThrow();
+  });
+
+  it("caps the title at 200 characters", () => {
+    expect(subtaskUpdateInputSchema.parse({ title: "a".repeat(200) }).title).toHaveLength(200);
+    expect(() => subtaskUpdateInputSchema.parse({ title: "a".repeat(201) })).toThrow();
+  });
+
+  it("rejects a missing title", () => {
+    expect(() => subtaskUpdateInputSchema.parse({})).toThrow();
   });
 });

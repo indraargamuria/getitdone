@@ -688,6 +688,101 @@ describe("subtask-aware completion", () => {
     ).toBe(true);
   });
 
+  it("renames a subtask and preserves its completion state", async () => {
+    const created = await json(
+      await request("/api/tasks", {
+        method: "POST",
+        body: { title: "Rename me", subtasks: ["first draft"] },
+        cookie: sessionCookie,
+      }),
+    );
+    const subId = created.body.task?.subtasks?.[0]?.id;
+    expect(subId).toBeTruthy();
+
+    await request(`/api/tasks/subtasks/${subId}/complete`, {
+      method: "POST",
+      body: { completed: true },
+      cookie: sessionCookie,
+    });
+
+    const renamed = await json(
+      await request(`/api/tasks/subtasks/${subId}`, {
+        method: "PATCH",
+        body: { title: "  final pass  " },
+        cookie: sessionCookie,
+      }),
+    );
+    expect(renamed.status).toBe(200);
+    expect(renamed.body.subtask?.title).toBe("final pass");
+    expect(renamed.body.subtask?.completedAt).toBeTruthy();
+
+    const task = await json(
+      await request(`/api/tasks/${created.body.task?.id}`, { cookie: sessionCookie }),
+    );
+    expect(task.body.task?.subtasks?.[0]?.title).toBe("final pass");
+    expect(task.body.task?.subtasks?.[0]?.completedAt).toBeTruthy();
+  });
+
+  it("rejects invalid subtask renames and unknown subtasks", async () => {
+    const created = await json(
+      await request("/api/tasks", {
+        method: "POST",
+        body: { title: "Edge cases", subtasks: ["keep me"] },
+        cookie: sessionCookie,
+      }),
+    );
+    const subId = created.body.task?.subtasks?.[0]?.id;
+
+    const tooLong = await json(
+      await request(`/api/tasks/subtasks/${subId}`, {
+        method: "PATCH",
+        body: { title: "b".repeat(201) },
+        cookie: sessionCookie,
+      }),
+    );
+    expect(tooLong.status).toBe(400);
+
+    const empty = await json(
+      await request(`/api/tasks/subtasks/${subId}`, {
+        method: "PATCH",
+        body: { title: "   " },
+        cookie: sessionCookie,
+      }),
+    );
+    expect(empty.status).toBe(400);
+
+    const missing = await json(
+      await request(`/api/tasks/subtasks/${subId}`, {
+        method: "PATCH",
+        body: {},
+        cookie: sessionCookie,
+      }),
+    );
+    expect(missing.status).toBe(400);
+
+    const notFound = await json(
+      await request("/api/tasks/subtasks/does-not-exist", {
+        method: "PATCH",
+        body: { title: "nope" },
+        cookie: sessionCookie,
+      }),
+    );
+    expect(notFound.status).toBe(404);
+
+    const unauthorized = await json(
+      await request(`/api/tasks/subtasks/${subId}`, {
+        method: "PATCH",
+        body: { title: "nope" },
+      }),
+    );
+    expect(unauthorized.status).toBe(401);
+
+    const intact = await json(
+      await request(`/api/tasks/${created.body.task?.id}`, { cookie: sessionCookie }),
+    );
+    expect(intact.body.task?.subtasks?.[0]?.title).toBe("keep me");
+  });
+
   it("rolls sub-list tasks into the parent list report summary", async () => {
     const parent = await json(
       await request("/api/lists", { method: "POST", body: { name: "Report Parent" }, cookie: sessionCookie }),

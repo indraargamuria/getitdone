@@ -1,4 +1,11 @@
-import { humanDueLabel, humanTime, type List, type Subtask, type Tag } from "@getitdone/shared";
+import {
+  humanDueLabel,
+  humanTime,
+  type List,
+  SUBTASK_TITLE_MAX,
+  type Subtask,
+  type Tag,
+} from "@getitdone/shared";
 import { useMutation } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { listsApi, type TaskWithRelations, tagsApi, tasksApi } from "../lib/api";
@@ -13,7 +20,16 @@ import {
   RecurrenceField,
   TagPicker,
 } from "./fields";
-import { CalendarIcon, NoteIcon, PlusIcon, RepeatIcon, TrashIcon, UserIcon, XIcon } from "./icons";
+import {
+  CalendarIcon,
+  NoteIcon,
+  PencilIcon,
+  PlusIcon,
+  RepeatIcon,
+  TrashIcon,
+  UserIcon,
+  XIcon,
+} from "./icons";
 import { PriorityBadge } from "./PriorityBadge";
 import { Checkbox, useToast } from "./ui";
 
@@ -58,6 +74,8 @@ export function TaskDetail({
   const [assignee, setAssignee] = useState<string | null>(task.assignee);
   const [subtasks, setSubtasks] = useState<Subtask[]>(task.subtasks);
   const [subInput, setSubInput] = useState("");
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
   const completed = !!task.completedAt;
 
   function refetch() {
@@ -173,6 +191,27 @@ export function TaskDetail({
     setSubtasks((prev) => prev.filter((s) => s.id !== sub.id));
     subMutation.mutate(async () => {
       await tasksApi.deleteSubtask(sub.id);
+    });
+  }
+
+  function beginRename(sub: Subtask) {
+    setRenamingId(sub.id);
+    setRenameValue(sub.title);
+  }
+
+  function commitRename(sub: Subtask) {
+    const title = renameValue.trim();
+    setRenamingId(null);
+    if (!title || title === sub.title) return;
+    setSubtasks((prev) => prev.map((s) => (s.id === sub.id ? { ...s, title } : s)));
+    subMutation.mutate(async () => {
+      try {
+        const res = await tasksApi.updateSubtask(sub.id, title);
+        setSubtasks((prev) => prev.map((s) => (s.id === sub.id ? res.subtask : s)));
+      } catch (e) {
+        setSubtasks((prev) => prev.map((s) => (s.id === sub.id ? sub : s)));
+        toast("error", "Couldn't rename subtask", (e as Error).message);
+      }
     });
   }
 
@@ -350,14 +389,45 @@ export function TaskDetail({
                     accent="var(--ok)"
                     label={`Mark subtask "${sub.title}" done`}
                   />
-                  <span
-                    className={cn(
-                      "flex-1 text-sm text-ink transition-colors",
-                      sub.completedAt && "text-inkfaint line-through",
-                    )}
-                  >
-                    {sub.title}
-                  </span>
+                  {renamingId === sub.id ? (
+                    <input
+                      autoFocus
+                      value={renameValue}
+                      onChange={(e) => setRenameValue(e.target.value)}
+                      onBlur={() => commitRename(sub)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          commitRename(sub);
+                        } else if (e.key === "Escape") {
+                          e.preventDefault();
+                          setRenamingId(null);
+                        }
+                      }}
+                      maxLength={SUBTASK_TITLE_MAX}
+                      aria-label="Rename subtask"
+                      className="flex-1 rounded-md border border-accent bg-card px-1.5 py-0.5 text-sm text-ink outline-none"
+                    />
+                  ) : (
+                    <>
+                      <span
+                        className={cn(
+                          "flex-1 text-sm text-ink transition-colors",
+                          sub.completedAt && "text-inkfaint line-through",
+                        )}
+                      >
+                        {sub.title}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => beginRename(sub)}
+                        aria-label={`Rename subtask "${sub.title}"`}
+                        className="cursor-pointer rounded-md p-1 text-inkfaint opacity-0 transition-all hover:text-accent group-hover:opacity-100"
+                      >
+                        <PencilIcon className="size-3.5" />
+                      </button>
+                    </>
+                  )}
                   <button
                     type="button"
                     onClick={() => deleteSubtask(sub)}

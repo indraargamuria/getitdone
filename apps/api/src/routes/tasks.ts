@@ -1,5 +1,6 @@
 import {
   reorderInputSchema,
+  subtaskUpdateInputSchema,
   taskCompleteInputSchema,
   taskCreateInputSchema,
   taskInputSchema,
@@ -64,12 +65,11 @@ taskRoutes.post("/reorder", zValidator("json", reorderInputSchema), async (c) =>
 
 taskRoutes.patch(
   "/subtasks/:subtaskId",
-  zValidator("json", taskInputSchema.partial()),
+  zValidator("json", subtaskUpdateInputSchema),
   async (c) => {
     const user = requireUser(c);
     if (!user) return c.json({ error: "Unauthorized" }, 401);
     const { title } = c.req.valid("json");
-    if (title === undefined) return c.json({ error: "Nothing to update" }, 400);
     const sub = await updateSubtask(getDb(c.env.DB), user.id, c.req.param("subtaskId"), { title });
     if (!sub) return c.json({ error: "Subtask not found" }, 404);
     return c.json({ subtask: sub });

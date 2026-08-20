@@ -76,9 +76,14 @@ export const subtaskSchema = z.object({
 export const SUBTASK_TITLE_MAX = 200;
 
 export const subtaskInputSchema = z.object({
-  title: z.string().trim().min(1).max(200),
+  title: z.string().trim().min(1).max(SUBTASK_TITLE_MAX),
   completedAt: z.string().nullable().optional(),
   sortOrder: z.number().optional(),
+});
+
+/** Payload for renaming a subtask: PATCH /api/tasks/subtasks/:id */
+export const subtaskUpdateInputSchema = z.object({
+  title: z.string().trim().min(1).max(SUBTASK_TITLE_MAX),
 });
 
 /** Priority: 1 = highest (P1) … 4 = none (P4). */
@@ -175,6 +180,7 @@ export type ListInput = z.infer<typeof listInputSchema>;
 export type Tag = z.infer<typeof tagSchema>;
 export type TagInput = z.infer<typeof tagInputSchema>;
 export type Subtask = z.infer<typeof subtaskSchema>;
+export type SubtaskUpdateInput = z.infer<typeof subtaskUpdateInputSchema>;
 export type Task = z.infer<typeof taskSchema>;
 export type TaskInput = z.infer<typeof taskInputSchema>;
 export type TaskCreateInput = z.infer<typeof taskCreateInputSchema>;
