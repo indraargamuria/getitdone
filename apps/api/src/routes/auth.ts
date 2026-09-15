@@ -18,9 +18,13 @@ import {
   getUserById,
 } from "../db/queries";
 import { requireUser } from "../middleware";
+import { rateLimit } from "../middleware/rateLimit";
 import type { AppEnv } from "../types";
 
 export const authRoutes = new Hono<AppEnv>();
+
+// Throttle signup + login: max 10 attempts per 15-minute window per IP
+const authThrottle = rateLimit({ windowMs: 15 * 60 * 1000, max: 10 });
 
 function toPublicUser(u: {
   id: string;
@@ -44,7 +48,7 @@ authRoutes.get("/me", async (c) => {
   return c.json({ user: toPublicUser(row) });
 });
 
-authRoutes.post("/signup", zValidator("json", signupInputSchema), async (c) => {
+authRoutes.post("/signup", authThrottle, zValidator("json", signupInputSchema), async (c) => {
   const { email, password, displayName } = c.req.valid("json");
   const db = getDb(c.env.DB);
 
@@ -63,7 +67,7 @@ authRoutes.post("/signup", zValidator("json", signupInputSchema), async (c) => {
   return c.json({ user: toPublicUser(user!) }, 201);
 });
 
-authRoutes.post("/login", zValidator("json", loginInputSchema), async (c) => {
+authRoutes.post("/login", authThrottle, zValidator("json", loginInputSchema), async (c) => {
   const { email, password } = c.req.valid("json");
   const db = getDb(c.env.DB);
 

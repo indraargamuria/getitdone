@@ -830,3 +830,40 @@ describe("session", () => {
     expect(me.status).toBe(401);
   });
 });
+
+describe("security headers", () => {
+  it("sets hardening headers on /api/health", async () => {
+    const res = await request("/api/health");
+    expect(res.headers.get("x-content-type-options")).toBe("nosniff");
+    expect(res.headers.get("x-frame-options")).toBe("DENY");
+    expect(res.headers.get("referrer-policy")).toBe("strict-origin-when-cross-origin");
+    expect(res.headers.get("strict-transport-security")).toContain("max-age=");
+    expect(res.headers.get("content-security-policy")).toBe("default-src 'none'; frame-ancestors 'none'");
+    expect(res.headers.get("cross-origin-opener-policy")).toBe("same-origin");
+    expect(res.headers.get("cross-origin-resource-policy")).toBe("same-origin");
+    expect(res.headers.get("cache-control")).toBe("no-store");
+    // Permissions-Policy is present and disables the listed features
+    const pp = res.headers.get("permissions-policy");
+    expect(pp).toBeTruthy();
+    expect(pp).toContain("camera=()");
+    expect(pp).toContain("microphone=()");
+  });
+});
+
+describe("auth rate limiting", () => {
+  it("returns 429 after many rapid signup attempts from the same IP", async () => {
+    // Each request uses X-Requested-With + JSON, all from the same Miniflare
+    // client IP (empty/undefined → "unknown").
+    // The limit is 10 per 15-min window; the earlier login/signup tests already
+    // used 2 attempts (one signup, one login), so 9 more should trip the limit.
+    let lastStatus = 200;
+    for (let i = 0; i < 12; i++) {
+      const res = await request("/api/auth/signup", {
+        body: { email: `ratelimit${i}@example.com`, password: "hunter2hunter2" },
+      });
+      lastStatus = res.status;
+      if (lastStatus === 429) break;
+    }
+    expect(lastStatus).toBe(429);
+  });
+});

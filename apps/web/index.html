@@ -7,16 +7,7 @@
     <meta name="theme-color" content="#F2EDE3" />
     <meta name="description" content="Get It Done — a personal task manager for the printed day." />
     <title>Get It Done</title>
-    <script>
-      (() => {
-        try {
-          var t = localStorage.getItem("gt_theme");
-          var dark =
-            t === "dark" || (t !== "light" && window.matchMedia("(prefers-color-scheme: dark)").matches);
-          document.documentElement.classList.toggle("dark", dark);
-        } catch (_e) {}
-      })();
-    </script>
+    <script type="module" src="/src/theme.ts"></script>
   </head>
   <body>
     <div id="root"></div>

@@ -11,6 +11,7 @@ import {
   listTags,
 } from "./db/queries";
 import { csrfGuard, sessionMiddleware } from "./middleware";
+import { securityHeaders } from "./middleware/securityHeaders";
 import { authRoutes } from "./routes/auth";
 import { listRoutes } from "./routes/lists";
 import { reportRoutes } from "./routes/reports";
@@ -42,6 +43,7 @@ export function createApp(env: DBEnv) {
 
   app.use("*", sessionMiddleware);
   app.use("/api/*", csrfGuard);
+  app.use("*", securityHeaders());
 
   app.get("/api/health", async (c) => {
     let db = "ok";
